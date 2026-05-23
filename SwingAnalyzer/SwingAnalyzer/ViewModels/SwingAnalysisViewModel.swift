@@ -137,7 +137,7 @@ class SwingAnalysisViewModel: ObservableObject {
                 // Create Swing entity
                 let swing = Swing(context: context)
                 swing.id = UUID()
-                swing.timestamp = Date(timeIntervalSince1970: swingData.startTime)
+                swing.timestamp = session.date.addingTimeInterval(swingData.startTime)
                 swing.videoURL = videoURL.path
                 swing.duration = swingData.duration
                 swing.session = session

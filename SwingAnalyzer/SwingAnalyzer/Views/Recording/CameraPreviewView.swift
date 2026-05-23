@@ -177,7 +177,7 @@ class CameraPreviewUIView: UIView {
     }
 
     private func layerPoint(forVisionPoint point: CGPoint) -> CGPoint {
-        let captureDevicePoint = CGPoint(x: point.x, y: 1 - point.y)
+        let captureDevicePoint = CGPoint(x: point.x, y: point.y)
         return previewLayer.layerPointConverted(fromCaptureDevicePoint: captureDevicePoint)
     }
 }

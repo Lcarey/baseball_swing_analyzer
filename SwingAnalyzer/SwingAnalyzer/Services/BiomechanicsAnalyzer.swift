@@ -103,7 +103,7 @@ class BiomechanicsAnalyzer {
 
         let contactHipCenter = CGPoint(
             x: (contactLeftHip.x + contactRightHip.x) / 2,
-            y: (contactRightHip.y + contactRightHip.y) / 2
+            y: (contactLeftHip.y + contactRightHip.y) / 2
         )
 
         let horizontal = BiomechanicsCalculations.horizontalMovement(

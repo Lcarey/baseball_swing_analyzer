@@ -46,9 +46,9 @@ struct BiomechanicsMetrics {
 
     private func scoreKneeBend(_ angle: Double) -> Double {
         switch angle {
-        case 140...160:
+        case 80...120:
             return 100
-        case 120..<140, 160..<180:
+        case 60..<80, 120..<140:
             return 70
         default:
             return 30
@@ -57,9 +57,9 @@ struct BiomechanicsMetrics {
 
     private func scoreHipRotation(_ angle: Double) -> Double {
         switch angle {
-        case 90...:
+        case 75...:
             return 100
-        case 60..<90:
+        case 50..<75:
             return 70
         default:
             return 30
@@ -68,9 +68,9 @@ struct BiomechanicsMetrics {
 
     private func scoreAlignment(_ percentage: Double) -> Double {
         switch percentage {
-        case 80...:
+        case 90...:
             return 100
-        case 60..<80:
+        case 75..<90:
             return 70
         default:
             return 30
@@ -79,9 +79,9 @@ struct BiomechanicsMetrics {
 
     private func scoreTimeToContact(_ time: Double) -> Double {
         switch time {
-        case 0.4...0.5:
+        case 0...0.35:
             return 100
-        case 0.3..<0.4, 0.5..<0.6:
+        case 0.35..<0.55:
             return 70
         default:
             return 30
@@ -89,12 +89,12 @@ struct BiomechanicsMetrics {
     }
 
     private func scoreHipMovement(horizontal: Double, vertical: Double) -> Double {
-        // Optimal ranges: horizontal 2-5 inches forward, vertical -2 to 2 inches
+        // Hip movement should stay low so rotation drives the swing instead of drift.
         let horizontalScore: Double
         switch abs(horizontal) {
-        case 2...5:
+        case 0...1.5:
             horizontalScore = 100
-        case 1..<2, 5..<7:
+        case 1.5..<4:
             horizontalScore = 70
         default:
             horizontalScore = 30
@@ -102,9 +102,9 @@ struct BiomechanicsMetrics {
 
         let verticalScore: Double
         switch abs(vertical) {
-        case 0...2:
+        case 0...1.5:
             verticalScore = 100
-        case 2..<4:
+        case 1.5..<4:
             verticalScore = 70
         default:
             verticalScore = 30

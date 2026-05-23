@@ -34,4 +34,34 @@ extension Swing: Identifiable {
         let set = jointData as? Set<JointData> ?? []
         return set.sorted { $0.frameNumber < $1.frameNumber }
     }
+
+    public var videoStartTime: Double {
+        if let session {
+            let offset = timestamp.timeIntervalSince(session.date)
+            let reasonableUpperBound = max(session.recordingDuration, duration) + 5
+            if offset >= 0, offset <= reasonableUpperBound {
+                return offset
+            }
+        }
+
+        let legacyOffset = timestamp.timeIntervalSince1970
+        if legacyOffset >= 0, legacyOffset < 60 * 60 {
+            return legacyOffset
+        }
+
+        return jointDataArray.first?.timestamp ?? 0
+    }
+
+    public var videoEndTime: Double {
+        let frameEndTime = jointDataArray.last?.timestamp ?? 0
+        return max(videoStartTime + duration, frameEndTime)
+    }
+
+    public var videoDisplayTime: Date {
+        if let session {
+            return session.date.addingTimeInterval(videoStartTime)
+        }
+
+        return timestamp
+    }
 }
