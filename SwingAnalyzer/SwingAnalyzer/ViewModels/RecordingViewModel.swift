@@ -18,11 +18,13 @@ class RecordingViewModel: ObservableObject {
     @Published var livePoseJoints: [String: CGPoint]?
 
     private let cameraService = CameraService()
+    private let cameraSetupQueue = DispatchQueue(label: "com.swinganalyzer.cameraSetup")
     private var cancellables = Set<AnyCancellable>()
     private var analysisCancellables = Set<AnyCancellable>()
     private var recordingURL: URL?
     private var analysisViewModel: SwingAnalysisViewModel?
     private let viewContext: NSManagedObjectContext
+    private var isSettingUp = false
 
     var session: Session?
 
@@ -66,19 +68,41 @@ class RecordingViewModel: ObservableObject {
             print("RecordingViewModel: Camera already setup")
             return
         }
+        guard !isSettingUp else {
+            print("RecordingViewModel: Camera setup already in progress")
+            return
+        }
+        isSettingUp = true
 
         print("RecordingViewModel: Setting up camera")
-        do {
-            let session = try cameraService.setupSession()
-            print("RecordingViewModel: Camera session created successfully")
-            captureSession = session
-            print("RecordingViewModel: Capture session assigned to published property")
-            cameraService.startSession()
-        } catch {
-            print("RecordingViewModel: ERROR - Camera setup failed: \(error)")
-            DispatchQueue.main.async {
-                self.error = "Failed to setup camera: \(error.localizedDescription)"
-                self.showError = true
+        cameraSetupQueue.async { [weak self] in
+            guard let self else { return }
+
+            defer {
+                DispatchQueue.main.async {
+                    self.isSettingUp = false
+                }
+            }
+
+            if self.captureSession != nil {
+                return
+            }
+
+            do {
+                let session = try self.cameraService.setupSession()
+                print("RecordingViewModel: Camera session created successfully")
+                DispatchQueue.main.async {
+                    guard self.captureSession == nil else { return }
+                    self.captureSession = session
+                    print("RecordingViewModel: Capture session assigned to published property")
+                    self.cameraService.startSession()
+                }
+            } catch {
+                print("RecordingViewModel: ERROR - Camera setup failed: \(error)")
+                DispatchQueue.main.async {
+                    self.error = "Failed to setup camera: \(error.localizedDescription)"
+                    self.showError = true
+                }
             }
         }
     }
@@ -211,6 +235,13 @@ class RecordingViewModel: ObservableObject {
         guard let session = session else { return }
         session.recordingURL = url.path
         session.recordingDuration = duration
+        session.recordingFrameRate = Double(AppConstants.frameRate)
+        if let exposureDuration = cameraService.configuredExposureDuration {
+            let exposureSeconds = CMTimeGetSeconds(exposureDuration)
+            if exposureSeconds.isFinite, exposureSeconds > 0 {
+                session.recordingExposureSeconds = exposureSeconds
+            }
+        }
         if let thumbnailData {
             session.thumbnailData = thumbnailData
         }
@@ -302,6 +333,7 @@ class RecordingViewModel: ObservableObject {
         cameraService.cleanup()
         captureSession = nil
         livePoseJoints = nil
+        isSettingUp = false
     }
 
     deinit {

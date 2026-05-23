@@ -40,6 +40,14 @@ struct SessionAverageView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .padding(.horizontal)
+
+                    NavigationLink(destination: SwingDetectionRerunView(session: session)) {
+                        Label("Rerun Detection", systemImage: "slider.horizontal.3")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal)
                 }
 
                 if swings.isEmpty {

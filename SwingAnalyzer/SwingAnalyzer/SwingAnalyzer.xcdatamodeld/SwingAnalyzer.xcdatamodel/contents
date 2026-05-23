@@ -11,8 +11,11 @@
         <attribute name="averageScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="date" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastDetectionSettingsJSON" optional="YES" attributeType="String"/>
         <attribute name="location" optional="YES" attributeType="String"/>
         <attribute name="recordingDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="recordingExposureSeconds" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="recordingFrameRate" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="recordingURL" optional="YES" attributeType="String"/>
         <attribute name="swingCount" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="thumbnailData" optional="YES" attributeType="Binary"/>

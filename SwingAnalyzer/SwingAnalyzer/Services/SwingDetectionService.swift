@@ -3,13 +3,6 @@ import CoreGraphics
 
 class SwingDetectionService {
     private let motionThreshold = AppConstants.motionThreshold
-    private let minSwingDuration = AppConstants.minSwingDuration
-    private let maxSwingDuration = max(AppConstants.maxSwingDuration, 1.25)
-    private let swingScoreThreshold = 1.05
-    private let swingReleaseThreshold = 0.58
-    private let minHandVelocity = 0.35
-    private let minArmVelocity = 0.25
-    private let minSwingSeparation = 1.8
 
     private struct SwingMotionSignal {
         let score: Double
@@ -20,29 +13,66 @@ class SwingDetectionService {
         let batProxyVelocity: Double
     }
 
-    private struct SwingCandidate {
-        let swing: SwingData
-        let peakScore: Double
-        let peakHandVelocity: Double
-    }
-
     // MARK: - Detect Swings
 
     func detectSwings(from frames: [FrameJointData], velocities: [Int: [String: Double]]) -> [SwingData] {
-        var candidates: [SwingCandidate] = []
+        let configuration = SwingDetectionConfiguration.balanced(expectedSwingCount: 0)
+        return detectCandidatePool(from: frames, velocities: velocities, configuration: configuration)
+            .map(\.swing)
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    func detectSwings(
+        from frames: [FrameJointData],
+        velocities: [Int: [String: Double]],
+        configuration: SwingDetectionConfiguration
+    ) -> [SwingData] {
+        let candidates = detectCandidates(from: frames, velocities: velocities, configuration: configuration)
+        let selectedCount = configuration.expectedSwingCount > 0 ? configuration.expectedSwingCount : candidates.count
+
+        return Array(candidates.prefix(selectedCount))
+            .map(\.swing)
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    func detectCandidates(
+        from frames: [FrameJointData],
+        velocities: [Int: [String: Double]],
+        configuration: SwingDetectionConfiguration
+    ) -> [SwingDetectionCandidate] {
+        detectCandidatePool(from: frames, velocities: velocities, configuration: configuration)
+            .sorted { lhs, rhs in
+                if lhs.rankingScore == rhs.rankingScore {
+                    return lhs.swing.startTime < rhs.swing.startTime
+                }
+                return lhs.rankingScore > rhs.rankingScore
+            }
+    }
+
+    private func detectCandidatePool(
+        from frames: [FrameJointData],
+        velocities: [Int: [String: Double]],
+        configuration: SwingDetectionConfiguration
+    ) -> [SwingDetectionCandidate] {
+        var candidates: [SwingDetectionCandidate] = []
         var currentSwingStart: Int?
         var peakVelocityFrame: Int?
         var maxScore: Double = 0
         var peakHandVelocity: Double = 0
+        var peakBatProxyVelocity: Double = 0
 
         for i in 0..<frames.count {
             let frame = frames[i]
-            let signal = calculateSwingMotionSignal(frame: frame.frameNumber, velocities: velocities)
-            let isLikelySwing = signal.score >= swingScoreThreshold &&
-                signal.handVelocity >= minHandVelocity &&
-                signal.armVelocity >= minArmVelocity
-            let shouldContinueSwing = signal.score >= swingReleaseThreshold &&
-                signal.handVelocity >= minHandVelocity * 0.5
+            let signal = calculateSwingMotionSignal(
+                frame: frame.frameNumber,
+                velocities: velocities,
+                configuration: configuration
+            )
+            let isLikelySwing = signal.score >= configuration.scoreThreshold &&
+                signal.handVelocity >= configuration.minHandVelocity &&
+                signal.armVelocity >= configuration.minArmVelocity
+            let shouldContinueSwing = signal.score >= configuration.releaseThreshold &&
+                signal.handVelocity >= configuration.minHandVelocity * 0.5
 
             if currentSwingStart == nil {
                 if isLikelySwing {
@@ -50,6 +80,7 @@ class SwingDetectionService {
                     maxScore = signal.score
                     peakVelocityFrame = i
                     peakHandVelocity = signal.handVelocity
+                    peakBatProxyVelocity = signal.batProxyVelocity
                 }
             } else if shouldContinueSwing {
                 if signal.score > maxScore {
@@ -57,6 +88,7 @@ class SwingDetectionService {
                     peakVelocityFrame = i
                 }
                 peakHandVelocity = max(peakHandVelocity, signal.handVelocity)
+                peakBatProxyVelocity = max(peakBatProxyVelocity, signal.batProxyVelocity)
             } else if let startFrame = currentSwingStart {
                 if let candidate = makeCandidate(
                     frames: frames,
@@ -64,7 +96,9 @@ class SwingDetectionService {
                     endFrame: i,
                     peakVelocityFrame: peakVelocityFrame,
                     peakScore: maxScore,
-                    peakHandVelocity: peakHandVelocity
+                    peakHandVelocity: peakHandVelocity,
+                    peakBatProxyVelocity: peakBatProxyVelocity,
+                    configuration: configuration
                 ) {
                     candidates.append(candidate)
                 }
@@ -73,10 +107,10 @@ class SwingDetectionService {
                 peakVelocityFrame = nil
                 maxScore = 0
                 peakHandVelocity = 0
+                peakBatProxyVelocity = 0
             }
         }
 
-        // Handle case where recording ends during a swing
         if let startFrame = currentSwingStart, startFrame < frames.count - 1 {
             if let candidate = makeCandidate(
                 frames: frames,
@@ -84,18 +118,24 @@ class SwingDetectionService {
                 endFrame: frames.count - 1,
                 peakVelocityFrame: peakVelocityFrame,
                 peakScore: maxScore,
-                peakHandVelocity: peakHandVelocity
+                peakHandVelocity: peakHandVelocity,
+                peakBatProxyVelocity: peakBatProxyVelocity,
+                configuration: configuration
             ) {
                 candidates.append(candidate)
             }
         }
 
-        return filterDuplicateCandidates(candidates).map(\.swing)
+        return filterDuplicateCandidates(candidates, minSwingSeparation: configuration.minSwingSeparation)
     }
 
     // MARK: - Calculate Swing Motion
 
-    private func calculateSwingMotionSignal(frame: Int, velocities: [Int: [String: Double]]) -> SwingMotionSignal {
+    private func calculateSwingMotionSignal(
+        frame: Int,
+        velocities: [Int: [String: Double]],
+        configuration: SwingDetectionConfiguration
+    ) -> SwingMotionSignal {
         let hipVelocity = calculateAverageVelocity(
             frame: frame,
             jointNames: [JointName.leftHip.visionKey, JointName.rightHip.visionKey],
@@ -123,10 +163,11 @@ class SwingDetectionService {
         )
         let coreVelocity = (hipVelocity + shoulderVelocity) / 2
         let batProxyVelocity = max(0, handVelocity - coreVelocity * 0.6)
-        let score = normalized(hipVelocity, threshold: motionThreshold) * 0.18 +
-            normalized(shoulderVelocity, threshold: 0.08) * 0.18 +
-            normalized(armVelocity, threshold: 0.25) * 0.26 +
-            normalized(batProxyVelocity, threshold: 0.35) * 0.38
+        let weights = configuration.normalizedWeights
+        let score = normalized(hipVelocity, threshold: motionThreshold) * weights.hip +
+            normalized(shoulderVelocity, threshold: 0.08) * weights.shoulder +
+            normalized(armVelocity, threshold: configuration.minArmVelocity) * weights.arm +
+            normalized(batProxyVelocity, threshold: configuration.minHandVelocity) * weights.batProxy
 
         return SwingMotionSignal(
             score: score,
@@ -149,14 +190,16 @@ class SwingDetectionService {
         endFrame: Int,
         peakVelocityFrame: Int?,
         peakScore: Double,
-        peakHandVelocity: Double
-    ) -> SwingCandidate? {
+        peakHandVelocity: Double,
+        peakBatProxyVelocity: Double,
+        configuration: SwingDetectionConfiguration
+    ) -> SwingDetectionCandidate? {
         guard startFrame < frames.count, endFrame < frames.count else { return nil }
 
         let swingDuration = frames[endFrame].timestamp - frames[startFrame].timestamp
-        guard swingDuration >= minSwingDuration,
-              swingDuration <= maxSwingDuration,
-              peakHandVelocity >= minHandVelocity else {
+        guard swingDuration >= configuration.minSwingDuration,
+              swingDuration <= configuration.maxSwingDuration,
+              peakHandVelocity >= configuration.minHandVelocity else {
             return nil
         }
 
@@ -165,15 +208,21 @@ class SwingDetectionService {
             endTime: frames[endFrame].timestamp,
             peakVelocityTime: peakVelocityFrame != nil ? frames[peakVelocityFrame!].timestamp : frames[endFrame].timestamp
         )
+        let rankingScore = peakScore + peakHandVelocity * 0.35 + peakBatProxyVelocity * 0.45
 
-        return SwingCandidate(
+        return SwingDetectionCandidate(
             swing: swing,
             peakScore: peakScore,
-            peakHandVelocity: peakHandVelocity
+            peakHandVelocity: peakHandVelocity,
+            peakBatProxyVelocity: peakBatProxyVelocity,
+            rankingScore: rankingScore
         )
     }
 
-    private func filterDuplicateCandidates(_ candidates: [SwingCandidate]) -> [SwingCandidate] {
+    private func filterDuplicateCandidates(
+        _ candidates: [SwingDetectionCandidate],
+        minSwingSeparation: Double
+    ) -> [SwingDetectionCandidate] {
         candidates.reduce(into: []) { accepted, candidate in
             guard let lastCandidate = accepted.last else {
                 accepted.append(candidate)
@@ -186,8 +235,7 @@ class SwingDetectionService {
                 return
             }
 
-            let shouldReplaceLast = candidate.peakScore > lastCandidate.peakScore ||
-                (candidate.peakScore == lastCandidate.peakScore && candidate.peakHandVelocity > lastCandidate.peakHandVelocity)
+            let shouldReplaceLast = candidate.rankingScore > lastCandidate.rankingScore
             if shouldReplaceLast {
                 accepted[accepted.count - 1] = candidate
             }
@@ -218,7 +266,6 @@ class SwingDetectionService {
     func detectHipRotation(frames: [FrameJointData]) -> Double {
         guard frames.count >= 2 else { return 0 }
 
-        // Get first and last frames with hip data
         var firstFrame: FrameJointData?
         var lastFrame: FrameJointData?
 

@@ -177,7 +177,38 @@ class CameraPreviewUIView: UIView {
     }
 
     private func layerPoint(forVisionPoint point: CGPoint) -> CGPoint {
-        let captureDevicePoint = CGPoint(x: point.x, y: point.y)
-        return previewLayer.layerPointConverted(fromCaptureDevicePoint: captureDevicePoint)
+        let videoRect = portraitAspectFillRect()
+        let normalizedX = min(max(point.x, 0), 1)
+        let normalizedY = 1 - min(max(point.y, 0), 1)
+
+        return CGPoint(
+            x: videoRect.minX + normalizedX * videoRect.width,
+            y: videoRect.minY + normalizedY * videoRect.height
+        )
+    }
+
+    private func portraitAspectFillRect() -> CGRect {
+        guard bounds.width > 0, bounds.height > 0 else { return bounds }
+
+        let sourceAspectRatio = CGFloat(AppConstants.videoWidth) / CGFloat(AppConstants.videoHeight)
+        let viewAspectRatio = bounds.width / bounds.height
+
+        if viewAspectRatio > sourceAspectRatio {
+            let height = bounds.width / sourceAspectRatio
+            return CGRect(
+                x: 0,
+                y: (bounds.height - height) / 2,
+                width: bounds.width,
+                height: height
+            )
+        }
+
+        let width = bounds.height * sourceAspectRatio
+        return CGRect(
+            x: (bounds.width - width) / 2,
+            y: 0,
+            width: width,
+            height: bounds.height
+        )
     }
 }

@@ -27,7 +27,7 @@ struct SwingSkeletonVideoView: View {
     init(swing: Swing) {
         self.swing = swing
         _player = State(initialValue: AVPlayer(url: URL(fileURLWithPath: swing.videoURL)))
-        _currentTime = State(initialValue: swing.videoStartTime)
+        _currentTime = State(initialValue: swing.replayStartTime)
     }
 
     var body: some View {
@@ -37,8 +37,8 @@ struct SwingSkeletonVideoView: View {
                     SkeletonOverlayPlayerRepresentable(
                         player: player,
                         frames: jointFrames,
-                        startTime: swing.videoStartTime,
-                        endTime: swing.videoEndTime,
+                        startTime: swing.replayStartTime,
+                        endTime: swing.replayEndTime,
                         currentTime: $currentTime,
                         onReachedEnd: {
                             isPlaying = false
@@ -82,7 +82,7 @@ struct SwingSkeletonVideoView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .onAppear {
-            seekToSwingStart()
+            seekToReplayStart()
         }
         .onDisappear {
             player.pause()
@@ -110,7 +110,7 @@ struct SwingSkeletonVideoView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
 
-                Text("\(formatElapsed(max(0, currentTime - swing.videoStartTime))) / \(formatElapsed(max(swing.duration, swing.videoEndTime - swing.videoStartTime)))")
+                Text("\(formatElapsed(max(0, currentTime - swing.replayStartTime))) / \(formatElapsed(swing.replayDuration))")
                     .font(.caption2.monospacedDigit())
                     .foregroundColor(.white.opacity(0.78))
             }
@@ -138,18 +138,18 @@ struct SwingSkeletonVideoView: View {
             return
         }
 
-        if currentTime >= swing.videoEndTime - 0.04 {
-            seekToSwingStart()
+        if currentTime >= swing.replayEndTime - 0.04 {
+            seekToReplayStart()
         }
 
         player.play()
         isPlaying = true
     }
 
-    private func seekToSwingStart() {
-        let targetTime = CMTime(seconds: swing.videoStartTime, preferredTimescale: 600)
+    private func seekToReplayStart() {
+        let targetTime = CMTime(seconds: swing.replayStartTime, preferredTimescale: 600)
         player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTime = swing.videoStartTime
+        currentTime = swing.replayStartTime
     }
 
     private func formatElapsed(_ seconds: Double) -> String {
@@ -398,7 +398,7 @@ final class SkeletonOverlayPlayerUIView: UIView {
     private func layerPoint(forVisionPoint point: CGPoint) -> CGPoint {
         let videoRect = playerLayer.videoRect == .zero ? bounds : playerLayer.videoRect
         let normalizedX = min(max(point.x, 0), 1)
-        let normalizedY = min(max(point.y, 0), 1)
+        let normalizedY = 1 - min(max(point.y, 0), 1)
 
         return CGPoint(
             x: videoRect.minX + normalizedX * videoRect.width,

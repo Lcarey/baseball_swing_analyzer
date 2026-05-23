@@ -14,6 +14,9 @@ struct AppConstants {
     static let shutterSpeedMedium: CMTime = CMTime(value: 1, timescale: 500)
     static let lowLightISOThreshold: Float = 400.0
 
+    // Swing replay UI
+    static let swingReplayPadding: Double = 0.1
+
     // Analysis Settings
     static let minSwingDuration: Double = 0.3 // seconds
     static let maxSwingDuration: Double = 1.0 // seconds

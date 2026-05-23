@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import AVFoundation
 
 struct SwingScoreView: View {
     let swing: Swing
@@ -427,6 +428,8 @@ struct SwingDataSummaryView: View {
                 DetailRow(label: "Swing window", value: "\(formatVideoOffset(swing.videoStartTime)) - \(formatVideoOffset(swing.videoEndTime))")
                 DetailRow(label: "Swing length", value: formatDuration(swing.duration))
                 DetailRow(label: "Pose frames", value: "\(swing.jointDataArray.count)")
+                DetailRow(label: "Frame rate", value: formatFrameRate(for: swing.session, videoURL: swing.videoURL))
+                DetailRow(label: "Shutter", value: formatShutter(for: swing.session))
                 DetailRow(label: "Source video", value: URL(fileURLWithPath: swing.videoURL).lastPathComponent)
             }
             .padding()
@@ -493,6 +496,32 @@ func formatVideoOffset(_ seconds: Double) -> String {
 
 func formatDuration(_ seconds: Double) -> String {
     String(format: "%.2fs", max(0, seconds))
+}
+
+func formatFrameRate(for session: Session?, videoURL: String) -> String {
+    if let session, session.recordingFrameRate > 0 {
+        return formatFPSValue(session.recordingFrameRate)
+    }
+
+    return formatFPSValue(Double(AppConstants.frameRate))
+}
+
+func formatShutter(for session: Session?) -> String {
+    guard let session, session.recordingExposureSeconds > 0 else {
+        return "Unknown"
+    }
+
+    let fraction = Int((1.0 / session.recordingExposureSeconds).rounded())
+    guard fraction > 0 else { return "Unknown" }
+    return "1/\(fraction)s"
+}
+
+private func formatFPSValue(_ fps: Double) -> String {
+    let rounded = fps.rounded()
+    if abs(fps - rounded) < 0.01 {
+        return "\(Int(rounded)) FPS"
+    }
+    return String(format: "%.2f FPS", fps)
 }
 
 extension MetricColor {

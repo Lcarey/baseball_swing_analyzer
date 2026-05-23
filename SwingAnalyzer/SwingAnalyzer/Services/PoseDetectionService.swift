@@ -1,6 +1,7 @@
 import Vision
 import AVFoundation
 import CoreGraphics
+import ImageIO
 import Combine
 
 class PoseDetectionService: ObservableObject {
@@ -56,6 +57,9 @@ class PoseDetectionService: ObservableObject {
             throw PoseError.invalidVideoURL
         }
 
+        let orientation = imageOrientation(for: videoTrack.preferredTransform)
+        print("PoseDetectionService: nominalFrameRate=\(videoTrack.nominalFrameRate), orientation=\(orientation.rawValue)")
+
         let assetReader = try AVAssetReader(asset: asset)
         let outputSettings: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -81,8 +85,7 @@ class PoseDetectionService: ObservableObject {
 
             let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
 
-            // Detect pose in frame
-            if let joints = detectPose(in: imageBuffer) {
+            if let joints = detectPose(in: imageBuffer, orientation: orientation) {
                 let frame = FrameJointData(
                     frameNumber: frameNumber,
                     timestamp: timestamp,
@@ -102,17 +105,23 @@ class PoseDetectionService: ObservableObject {
             }
         }
 
-        // Smooth joint data
+        let detectionRate = frameNumber > 0 ? Double(frameData.count) / Double(frameNumber) : 0
+        print("PoseDetectionService: framesRead=\(frameNumber), framesWithPose=\(frameData.count), detectionRate=\(String(format: "%.1f%%", detectionRate * 100))")
+
         return smoothJointData(frameData)
     }
 
     // MARK: - Pose Detection
 
-    private func detectPose(in imageBuffer: CVPixelBuffer) -> [String: CGPoint]? {
+    private func detectPose(in imageBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> [String: CGPoint]? {
         let request = VNDetectHumanBodyPoseRequest()
         request.revision = VNDetectHumanBodyPoseRequestRevision1
 
-        let handler = VNImageRequestHandler(cvPixelBuffer: imageBuffer, options: [:])
+        let handler = VNImageRequestHandler(
+            cvPixelBuffer: imageBuffer,
+            orientation: orientation,
+            options: [:]
+        )
 
         do {
             try handler.perform([request])
@@ -217,5 +226,18 @@ class PoseDetectionService: ObservableObject {
         }
 
         return velocities
+    }
+
+    private func imageOrientation(for transform: CGAffineTransform) -> CGImagePropertyOrientation {
+        switch (transform.a, transform.b, transform.c, transform.d) {
+        case (0, 1, -1, 0):
+            return .right
+        case (0, -1, 1, 0):
+            return .left
+        case (-1, 0, 0, -1):
+            return .down
+        default:
+            return .up
+        }
     }
 }

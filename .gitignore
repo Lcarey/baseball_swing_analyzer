@@ -91,3 +91,8 @@ iOSInjectionProject/
 
 # Mac
 .DS_Store
+
+# Bundled sample videos (kept locally for development; not tracked due to size)
+SwingAnalyzer/SwingAnalyzer/Resources/SampleVideos/*.mov
+SwingAnalyzer/SwingAnalyzer/Resources/SampleVideos/*.MP4
+SwingAnalyzer/SwingAnalyzer/Resources/SampleVideos/*.mp4

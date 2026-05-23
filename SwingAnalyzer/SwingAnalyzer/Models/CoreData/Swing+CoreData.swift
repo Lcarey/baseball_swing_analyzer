@@ -57,6 +57,22 @@ extension Swing: Identifiable {
         return max(videoStartTime + duration, frameEndTime)
     }
 
+    public var replayStartTime: Double {
+        max(0, videoStartTime - AppConstants.swingReplayPadding)
+    }
+
+    public var replayEndTime: Double {
+        let paddedEnd = videoEndTime + AppConstants.swingReplayPadding
+        if let session, session.recordingDuration > 0 {
+            return min(paddedEnd, session.recordingDuration)
+        }
+        return paddedEnd
+    }
+
+    public var replayDuration: Double {
+        max(0, replayEndTime - replayStartTime)
+    }
+
     public var videoDisplayTime: Date {
         if let session {
             return session.date.addingTimeInterval(videoStartTime)

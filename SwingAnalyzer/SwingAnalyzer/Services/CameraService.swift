@@ -9,6 +9,8 @@ class CameraService: NSObject, ObservableObject {
     @Published var error: CameraError?
     @Published var isAuthorized = false
     @Published var livePoseJoints: [String: CGPoint]?
+    @Published var configuredFrameRate: Double?
+    @Published var configuredExposureDuration: CMTime?
 
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureMovieFileOutput?
@@ -101,12 +103,12 @@ class CameraService: NSObject, ObservableObject {
         let session = AVCaptureSession()
         session.beginConfiguration()
 
-        // Set session preset for high quality
-        if session.canSetSessionPreset(.high) {
-            session.sessionPreset = .high
-            print("CameraService: Set session preset to .high")
+        // inputPriority honors the device's activeFormat (120 FPS). .high caps around 30 FPS at 1080p.
+        if session.canSetSessionPreset(.inputPriority) {
+            session.sessionPreset = .inputPriority
+            print("CameraService: Set session preset to .inputPriority")
         } else {
-            print("CameraService: WARNING - Cannot set .high preset")
+            print("CameraService: WARNING - Cannot set .inputPriority preset")
         }
 
         // Get video device
@@ -169,22 +171,27 @@ class CameraService: NSObject, ObservableObject {
         if session.canAddOutput(videoDataOutput) {
             session.addOutput(videoDataOutput)
             videoDataOutput.setSampleBufferDelegate(self, queue: livePoseQueue)
+            configurePortraitOrientation(for: videoDataOutput.connection(with: .video), label: "Live pose data output")
             self.videoDataOutput = videoDataOutput
             print("CameraService: Live pose video data output added to session")
         } else {
             print("CameraService: WARNING - Cannot add live pose video data output; recording will continue without overlay")
         }
 
-        // Configure output
         if let connection = movieOutput.connection(with: .video) {
+            configurePortraitOrientation(for: connection, label: "Movie output")
             if connection.isVideoStabilizationSupported {
-                connection.preferredVideoStabilizationMode = .auto
-                print("CameraService: Video stabilization enabled")
+                connection.preferredVideoStabilizationMode = .off
+                print("CameraService: Video stabilization disabled for \(AppConstants.frameRate) FPS capture")
             }
         }
 
         session.commitConfiguration()
         self.captureSession = session
+
+        try validateFrameRate(for: videoDevice, label: "after session commit")
+        verifyDeviceConfiguration(videoDevice)
+
         print("CameraService: Session setup complete")
 
         return session
@@ -265,11 +272,6 @@ class CameraService: NSObject, ObservableObject {
             print("CameraService: Manual exposure applied at time: \(time)")
         }
 
-        // STEP 7: Verify configuration (async readback after short delay)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.verifyDeviceConfiguration(device)
-        }
-
         print("CameraService: === Configuration Complete ===")
     }
 
@@ -334,9 +336,26 @@ class CameraService: NSObject, ObservableObject {
         return clampedISO
     }
 
+    private func validateFrameRate(for device: AVCaptureDevice, label: String) throws {
+        let actualFPS = measuredFrameRate(for: device)
+        let targetFPS = Double(AppConstants.frameRate)
+        print("CameraService: Frame rate check \(label): \(String(format: "%.1f", actualFPS)) FPS (target \(Int(targetFPS)))")
+
+        guard actualFPS >= targetFPS * 0.9 else {
+            throw CameraError.configurationFailed(
+                reason: "Capture session is \(Int(actualFPS)) FPS, not \(Int(targetFPS)) FPS. Check session preset and stabilization settings."
+            )
+        }
+    }
+
+    private func measuredFrameRate(for device: AVCaptureDevice) -> Double {
+        let frameDurationSeconds = CMTimeGetSeconds(device.activeVideoMinFrameDuration)
+        guard frameDurationSeconds > 0 else { return 0 }
+        return 1.0 / frameDurationSeconds
+    }
+
     private func verifyDeviceConfiguration(_ device: AVCaptureDevice) {
-        let actualFrameDurationSeconds = CMTimeGetSeconds(device.activeVideoMinFrameDuration)
-        let actualFPS = actualFrameDurationSeconds > 0 ? 1.0 / actualFrameDurationSeconds : 0
+        let actualFPS = measuredFrameRate(for: device)
         let actualISO = device.iso
         let actualExposure = device.exposureDuration
         let actualShutterFraction = shutterFraction(for: actualExposure)
@@ -353,12 +372,35 @@ class CameraService: NSObject, ObservableObject {
 
         print("CameraService: Exposure Mode: \(device.exposureMode.rawValue)")
         print("CameraService: ====================================")
+
+        let publishedFrameRate = actualFPS >= Double(AppConstants.frameRate) * 0.9
+            ? Double(AppConstants.frameRate)
+            : (actualFPS > 0 ? actualFPS : nil)
+
+        DispatchQueue.main.async { [weak self] in
+            self?.configuredFrameRate = publishedFrameRate
+            self?.configuredExposureDuration = actualShutterFraction > 0 ? actualExposure : nil
+        }
     }
 
     private func shutterFraction(for exposureDuration: CMTime) -> Int {
         let seconds = CMTimeGetSeconds(exposureDuration)
         guard seconds.isFinite, seconds > 0 else { return 0 }
         return Int((1.0 / seconds).rounded())
+    }
+
+    private func configurePortraitOrientation(for connection: AVCaptureConnection?, label: String) {
+        guard let connection else {
+            print("CameraService: WARNING - \(label) connection unavailable")
+            return
+        }
+
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+            print("CameraService: \(label) orientation set to portrait")
+        } else {
+            print("CameraService: WARNING - \(label) does not support video orientation")
+        }
     }
 
     // MARK: - Recording
@@ -442,8 +484,10 @@ class CameraService: NSObject, ObservableObject {
     }
 
     func stopSession() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession?.stopRunning()
+        let session = captureSession
+        guard let session else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            session.stopRunning()
         }
     }
 
@@ -518,7 +562,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         let handler = VNImageRequestHandler(
             cvPixelBuffer: imageBuffer,
-            orientation: .right,
+            orientation: .up,
             options: [:]
         )
 
