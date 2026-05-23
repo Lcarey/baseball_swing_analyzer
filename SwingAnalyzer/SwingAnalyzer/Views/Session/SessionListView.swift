@@ -63,7 +63,9 @@ struct SessionListView: View {
     private var sessionsList: some View {
         List {
             ForEach(viewModel.sessions) { session in
-                SessionRowView(session: session)
+                NavigationLink(destination: SessionAverageView(session: session)) {
+                    SessionRowView(session: session)
+                }
             }
             .onDelete(perform: deleteSessions)
         }
