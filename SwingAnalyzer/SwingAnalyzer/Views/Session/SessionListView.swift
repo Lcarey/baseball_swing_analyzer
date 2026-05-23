@@ -24,8 +24,9 @@ struct SessionListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingCamera) {
-            Text("Camera View - Coming Soon")
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView()
+                .environmentObject(viewModel)
         }
     }
 

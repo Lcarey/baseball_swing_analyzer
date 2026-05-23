@@ -1,0 +1,152 @@
+import Foundation
+import AVFoundation
+import Combine
+import CoreData
+
+class RecordingViewModel: ObservableObject {
+    @Published var isRecording = false
+    @Published var recordingDuration: TimeInterval = 0
+    @Published var captureSession: AVCaptureSession?
+    @Published var error: String?
+    @Published var showError = false
+
+    private let cameraService = CameraService()
+    private var cancellables = Set<AnyCancellable>()
+    private var recordingURL: URL?
+    private let viewContext: NSManagedObjectContext
+
+    var session: Session?
+
+    init(context: NSManagedObjectContext = PersistenceController.shared.container.viewContext) {
+        self.viewContext = context
+        setupBindings()
+    }
+
+    private func setupBindings() {
+        cameraService.$isRecording
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isRecording)
+
+        cameraService.$recordingDuration
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$recordingDuration)
+
+        cameraService.$error
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                if let error = error {
+                    self?.error = error.localizedDescription
+                    self?.showError = true
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Camera Setup
+
+    func setupCamera() {
+        do {
+            let session = try cameraService.setupSession()
+            DispatchQueue.main.async {
+                self.captureSession = session
+            }
+            cameraService.startSession()
+        } catch {
+            DispatchQueue.main.async {
+                self.error = "Failed to setup camera: \(error.localizedDescription)"
+                self.showError = true
+            }
+        }
+    }
+
+    func checkCameraAuthorization() -> Bool {
+        return cameraService.isAuthorized
+    }
+
+    func requestCameraAccess() {
+        cameraService.requestAuthorization()
+    }
+
+    // MARK: - Recording Control
+
+    func startRecording() {
+        do {
+            recordingURL = try cameraService.startRecording()
+        } catch {
+            self.error = "Failed to start recording: \(error.localizedDescription)"
+            self.showError = true
+        }
+    }
+
+    func stopRecording(completion: @escaping (URL?) -> Void) {
+        cameraService.stopRecording()
+
+        // Give it a moment to finish writing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self, let url = self.recordingURL else {
+                completion(nil)
+                return
+            }
+
+            // Verify file exists
+            if FileManager.default.fileExists(atPath: url.path) {
+                completion(url)
+            } else {
+                self.error = "Recording file not found"
+                self.showError = true
+                completion(nil)
+            }
+        }
+    }
+
+    // MARK: - Session Management
+
+    func createSession() {
+        let newSession = Session(context: viewContext)
+        newSession.id = UUID()
+        newSession.date = Date()
+        newSession.averageScore = 0
+        newSession.swingCount = 0
+        self.session = newSession
+
+        saveContext()
+    }
+
+    func saveRecording(url: URL) {
+        guard let session = session else {
+            createSession()
+            saveRecording(url: url)
+            return
+        }
+
+        // For now, just save the session
+        // Video processing will happen in Phase 3
+        print("Recording saved: \(url.path)")
+        print("Session: \(session.id)")
+
+        // We'll process the video for swings in Phase 3
+        // For now, just mark that we have a recording
+        saveContext()
+    }
+
+    private func saveContext() {
+        do {
+            try viewContext.save()
+        } catch {
+            print("Error saving context: \(error)")
+            self.error = "Failed to save session"
+            self.showError = true
+        }
+    }
+
+    // MARK: - Cleanup
+
+    func cleanup() {
+        cameraService.cleanup()
+        captureSession = nil
+    }
+
+    deinit {
+        cleanup()
+    }
+}
