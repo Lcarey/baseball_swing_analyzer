@@ -117,10 +117,13 @@ struct CameraView: View {
     private func stopRecordingAndDismiss() {
         viewModel.stopRecording { url in
             if let url = url {
-                viewModel.saveRecording(url: url)
-                sessionViewModel.fetchSessions()
+                viewModel.saveRecording(url: url) {
+                    sessionViewModel.fetchSessions()
+                    dismiss()
+                }
+            } else {
+                dismiss()
             }
-            dismiss()
         }
     }
 

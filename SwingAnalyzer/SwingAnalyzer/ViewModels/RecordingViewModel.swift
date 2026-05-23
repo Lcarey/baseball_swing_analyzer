@@ -112,21 +112,26 @@ class RecordingViewModel: ObservableObject {
         saveContext()
     }
 
-    func saveRecording(url: URL) {
+    func saveRecording(url: URL, completion: @escaping () -> Void) {
         guard let session = session else {
             createSession()
-            saveRecording(url: url)
+            saveRecording(url: url, completion: completion)
             return
         }
 
-        // For now, just save the session
-        // Video processing will happen in Phase 3
         print("Recording saved: \(url.path)")
         print("Session: \(session.id)")
 
-        // We'll process the video for swings in Phase 3
-        // For now, just mark that we have a recording
-        saveContext()
+        // Start video processing
+        let analysisVM = SwingAnalysisViewModel(context: viewContext)
+        analysisVM.processVideo(url: url, for: session) { success in
+            if success {
+                print("Video analysis complete!")
+            } else {
+                print("Video analysis failed")
+            }
+            completion()
+        }
     }
 
     private func saveContext() {
