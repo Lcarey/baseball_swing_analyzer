@@ -14,6 +14,7 @@ class RecordingViewModel: ObservableObject {
     private let cameraService = CameraService()
     private var cancellables = Set<AnyCancellable>()
     private var recordingURL: URL?
+    private var analysisViewModel: SwingAnalysisViewModel?
     private let viewContext: NSManagedObjectContext
 
     var session: Session?
@@ -94,6 +95,14 @@ class RecordingViewModel: ObservableObject {
 
         do {
             recordingURL = try cameraService.startRecording()
+
+            if session == nil {
+                createSession()
+            }
+
+            session?.date = Date()
+            session?.recordingDuration = 0
+            saveContext()
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             self.showError = true
@@ -101,6 +110,7 @@ class RecordingViewModel: ObservableObject {
     }
 
     func stopRecording(completion: @escaping (URL?) -> Void) {
+        let fallbackDuration = recordingDuration
         cameraService.stopRecording()
 
         // Give it a moment to finish writing
@@ -112,7 +122,11 @@ class RecordingViewModel: ObservableObject {
 
             // Verify file exists
             if FileManager.default.fileExists(atPath: url.path) {
-                completion(url)
+                Task { @MainActor in
+                    let duration = await self.recordingDuration(from: url, fallbackDuration: fallbackDuration)
+                    self.updateRecordingDuration(duration)
+                    completion(url)
+                }
             } else {
                 self.error = "Recording file not found"
                 self.showError = true
@@ -128,9 +142,30 @@ class RecordingViewModel: ObservableObject {
         newSession.id = UUID()
         newSession.date = Date()
         newSession.averageScore = 0
+        newSession.recordingDuration = 0
         newSession.swingCount = 0
         self.session = newSession
 
+        saveContext()
+    }
+
+    private func recordingDuration(from url: URL, fallbackDuration: TimeInterval) async -> TimeInterval {
+        do {
+            let duration = try await AVAsset(url: url).load(.duration)
+            let seconds = CMTimeGetSeconds(duration)
+            if seconds.isFinite && seconds > 0 {
+                return seconds
+            }
+        } catch {
+            print("Failed to load recording duration: \(error)")
+        }
+
+        return fallbackDuration
+    }
+
+    private func updateRecordingDuration(_ duration: TimeInterval) {
+        guard let session = session else { return }
+        session.recordingDuration = duration
         saveContext()
     }
 
@@ -146,12 +181,14 @@ class RecordingViewModel: ObservableObject {
 
         // Start video processing
         let analysisVM = SwingAnalysisViewModel(context: viewContext)
+        analysisViewModel = analysisVM
         analysisVM.processVideo(url: url, for: session) { success in
             if success {
                 print("Video analysis complete!")
             } else {
                 print("Video analysis failed")
             }
+            self.analysisViewModel = nil
             completion()
         }
     }

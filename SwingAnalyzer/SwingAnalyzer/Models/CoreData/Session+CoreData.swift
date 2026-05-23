@@ -7,6 +7,7 @@ public class Session: NSManagedObject {
     @NSManaged public var date: Date
     @NSManaged public var location: String?
     @NSManaged public var averageScore: Double
+    @NSManaged public var recordingDuration: Double
     @NSManaged public var swingCount: Int16
     @NSManaged public var swings: NSSet?
 }
@@ -30,5 +31,13 @@ extension Session: Identifiable {
     public var swingsArray: [Swing] {
         let set = swings as? Set<Swing> ?? []
         return set.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    public var displayRecordingDuration: Double {
+        if recordingDuration > 0 {
+            return recordingDuration
+        }
+
+        return swingsArray.reduce(0) { $0 + $1.duration }
     }
 }

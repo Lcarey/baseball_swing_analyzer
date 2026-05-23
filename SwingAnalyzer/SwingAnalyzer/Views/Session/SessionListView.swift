@@ -24,7 +24,9 @@ struct SessionListView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingCamera) {
+        .fullScreenCover(isPresented: $showingCamera, onDismiss: {
+            viewModel.fetchSessions()
+        }) {
             CameraView()
                 .environmentObject(viewModel)
         }
@@ -107,6 +109,10 @@ struct SessionRowView: View {
                 Text(session.date.formattedForDisplay())
                     .font(.headline)
 
+                Text("\(session.date.formattedTimeForDisplay()) • Length: \(recordingLengthText)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
                 Text("\(session.swingCount) swing\(session.swingCount == 1 ? "" : "s")")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -129,6 +135,11 @@ struct SessionRowView: View {
         } else {
             return AppConstants.colorRed
         }
+    }
+
+    private var recordingLengthText: String {
+        let seconds = max(0, Int(session.displayRecordingDuration.rounded()))
+        return "\(seconds) sec"
     }
 }
 

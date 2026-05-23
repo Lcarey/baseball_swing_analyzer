@@ -140,6 +140,7 @@ struct CameraView: View {
                     dismiss()
                 }
             } else {
+                sessionViewModel.fetchSessions()
                 dismiss()
             }
         }
@@ -152,10 +153,6 @@ struct CameraView: View {
         if isAuthorized {
             print("CameraView: Setting up camera")
             viewModel.setupCamera()
-            if viewModel.session == nil {
-                print("CameraView: Creating new session")
-                viewModel.createSession()
-            }
         } else {
             print("CameraView: Not authorized, skipping camera setup")
         }

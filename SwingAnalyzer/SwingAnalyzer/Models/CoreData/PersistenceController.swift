@@ -12,6 +12,7 @@ struct PersistenceController {
         session.id = UUID()
         session.date = Date()
         session.averageScore = 73
+        session.recordingDuration = 12
         session.swingCount = 2
 
         do {
@@ -31,6 +32,10 @@ struct PersistenceController {
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
+
+        let storeDescription = container.persistentStoreDescriptions.first
+        storeDescription?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+        storeDescription?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
 
         container.loadPersistentStores { (storeDescription, error) in
             if let error = error as NSError? {

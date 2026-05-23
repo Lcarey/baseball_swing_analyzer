@@ -34,6 +34,7 @@ class SessionViewModel: ObservableObject {
         session.id = UUID()
         session.date = Date()
         session.averageScore = 0
+        session.recordingDuration = 0
         session.swingCount = 0
 
         saveContext()
