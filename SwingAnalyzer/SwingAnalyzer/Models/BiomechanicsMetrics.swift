@@ -1,6 +1,6 @@
 import Foundation
 
-struct BiomechanicsMetrics: Codable, Equatable {
+nonisolated struct BiomechanicsMetrics: Codable, Equatable {
     let kneeBend: Double // degrees
     let hipRotation: Double // degrees
     let hipHorizontalMovement: Double // inches

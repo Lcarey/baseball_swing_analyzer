@@ -1,13 +1,13 @@
 import Foundation
 
-enum BatterHandedness: String, Codable, CaseIterable, Identifiable {
+nonisolated enum BatterHandedness: String, Codable, CaseIterable, Identifiable {
     case right
     case left
 
     var id: String { rawValue }
 }
 
-enum SwingCameraAngle: String, Codable, CaseIterable, Identifiable {
+nonisolated enum SwingCameraAngle: String, Codable, CaseIterable, Identifiable {
     case side
     case diagonal
     case front
@@ -16,7 +16,7 @@ enum SwingCameraAngle: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum ScoreConfidence: String, Codable, CaseIterable {
+nonisolated enum ScoreConfidence: String, Codable, CaseIterable {
     case high
     case medium
     case low
@@ -33,7 +33,7 @@ enum ScoreConfidence: String, Codable, CaseIterable {
     }
 }
 
-struct SwingScoringProfile: Codable, Equatable {
+nonisolated struct SwingScoringProfile: Codable, Equatable {
     let id: String
     let displayName: String
     let hipShoulderSeparationWeight: Double
@@ -57,7 +57,7 @@ struct SwingScoringProfile: Codable, Equatable {
     )
 }
 
-struct SwingAnalysisContext: Codable, Equatable {
+nonisolated struct SwingAnalysisContext: Codable, Equatable {
     var handedness: BatterHandedness
     var cameraAngle: SwingCameraAngle
     var scoringProfile: SwingScoringProfile
@@ -71,7 +71,7 @@ struct SwingAnalysisContext: Codable, Equatable {
     )
 }
 
-struct SwingPhaseMarkers: Codable, Equatable {
+nonisolated struct SwingPhaseMarkers: Codable, Equatable {
     let setupTime: Double
     let heelStrikeTime: Double
     let firstMoveTime: Double
@@ -82,7 +82,7 @@ struct SwingPhaseMarkers: Codable, Equatable {
     let contactFrame: Int
 }
 
-struct AdvancedSwingMetrics: Codable, Equatable {
+nonisolated struct AdvancedSwingMetrics: Codable, Equatable {
     let hipShoulderSeparationAtFirstMove: Double
     let hipShoulderSeparationAtContact: Double
     let pelvisRotationAtContact: Double
@@ -101,7 +101,7 @@ struct AdvancedSwingMetrics: Codable, Equatable {
     let hipVerticalMovement: Double
 }
 
-struct PoseQualityReport: Codable, Equatable {
+nonisolated struct PoseQualityReport: Codable, Equatable {
     let totalFrames: Int
     let framesWithCoreJoints: Int
     let keyJointAvailability: Double
@@ -111,7 +111,7 @@ struct PoseQualityReport: Codable, Equatable {
     let warnings: [String]
 }
 
-struct SwingScoreComponent: Codable, Equatable, Identifiable {
+nonisolated struct SwingScoreComponent: Codable, Equatable, Identifiable {
     let id: String
     let title: String
     let score: Double
@@ -121,7 +121,7 @@ struct SwingScoreComponent: Codable, Equatable, Identifiable {
     let detail: String
 }
 
-struct SwingScoreBreakdown: Codable, Equatable {
+nonisolated struct SwingScoreBreakdown: Codable, Equatable {
     let analysisVersion: String
     let profileID: String
     let profileName: String
@@ -132,7 +132,7 @@ struct SwingScoreBreakdown: Codable, Equatable {
     let warnings: [String]
 }
 
-struct SwingAnalysisResult: Codable, Equatable {
+nonisolated struct SwingAnalysisResult: Codable, Equatable {
     let legacyMetrics: BiomechanicsMetrics
     let advancedMetrics: AdvancedSwingMetrics
     let phaseMarkers: SwingPhaseMarkers
@@ -142,7 +142,7 @@ struct SwingAnalysisResult: Codable, Equatable {
 }
 
 extension Encodable {
-    var encodedJSONString: String? {
+    nonisolated var encodedJSONString: String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(self) else { return nil }
@@ -151,7 +151,7 @@ extension Encodable {
 }
 
 extension Decodable {
-    static func decodeJSON(from json: String?) -> Self? {
+    nonisolated static func decodeJSON(from json: String?) -> Self? {
         guard let json, let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(Self.self, from: data)
     }
