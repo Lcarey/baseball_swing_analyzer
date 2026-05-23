@@ -22,6 +22,19 @@ final class SampleSessionSeeder {
 
     static let shared = SampleSessionSeeder()
 
+    /// First-generation sample sessions (large bundled videos); removed on launch.
+    private static let legacyStableSessionIDs: [UUID] = [
+        UUID(uuidString: "B100B100-0000-0000-0000-000000000004")!,
+        UUID(uuidString: "B100B100-0000-0000-0000-000000002026")!,
+        UUID(uuidString: "B100B100-0000-0000-0000-000000002028")!
+    ]
+
+    private static let legacyStoredFileNames = [
+        "sample_BP_000004.mov",
+        "sample_BP_002026.mov",
+        "sample_BP_002028.mov"
+    ]
+
     private let samples: [SampleVideo]
     private let analysisQueue = DispatchQueue(label: "com.swinganalyzer.sampleSeeder", qos: .userInitiated)
     private var isRunning = false
@@ -86,6 +99,13 @@ final class SampleSessionSeeder {
             self.isRunning = true
 
             self.analysisQueue.async {
+                let removedLegacy = self.removeLegacySampleSessions(context: context)
+                if removedLegacy {
+                    DispatchQueue.main.async {
+                        onSessionUpdated?()
+                    }
+                }
+
                 let missing = self.missingSamples(context: context)
                 guard !missing.isEmpty else {
                     DispatchQueue.main.async { self.isRunning = false }
@@ -96,6 +116,70 @@ final class SampleSessionSeeder {
                     DispatchQueue.main.async { self.isRunning = false }
                 }
             }
+        }
+    }
+
+    // MARK: - Legacy Cleanup
+
+    @discardableResult
+    private func removeLegacySampleSessions(context: NSManagedObjectContext) -> Bool {
+        var didRemove = false
+
+        context.performAndWait {
+            let request: NSFetchRequest<Session> = Session.fetchRequest()
+            request.predicate = NSPredicate(format: "id IN %@", Self.legacyStableSessionIDs)
+            let sessions = (try? context.fetch(request)) ?? []
+
+            for session in sessions {
+                if let recordingURL = session.recordingURL {
+                    deleteVideoFile(at: recordingURL)
+                }
+                for swing in session.swingsArray {
+                    deleteVideoFile(at: swing.videoURL)
+                }
+                context.delete(session)
+            }
+
+            if removeLegacyVideoFiles() {
+                didRemove = true
+            }
+
+            if !sessions.isEmpty {
+                do {
+                    try context.save()
+                    print("SampleSessionSeeder: removed \(sessions.count) legacy sample session(s)")
+                    didRemove = true
+                } catch {
+                    print("SampleSessionSeeder: failed to save after legacy cleanup: \(error)")
+                }
+            }
+        }
+
+        return didRemove
+    }
+
+    @discardableResult
+    private func removeLegacyVideoFiles() -> Bool {
+        var removedAny = false
+        for fileName in Self.legacyStoredFileNames {
+            let url = recordedVideosDirectory().appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: url.path) {
+                try? FileManager.default.removeItem(at: url)
+                removedAny = true
+            }
+        }
+        return removedAny
+    }
+
+    private func recordedVideosDirectory() -> URL {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsPath.appendingPathComponent(AppConstants.videosDirectory)
+    }
+
+    private func deleteVideoFile(at urlString: String) {
+        let url = URL(fileURLWithPath: urlString)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 

@@ -151,22 +151,4 @@ class BiomechanicsAnalyzer {
             rightShoulder: rightShoulder
         )
     }
-
-    // MARK: - Batch Analysis
-
-    func analyzeMultipleSwings(allFrames: [FrameJointData], swings: [SwingData]) -> [BiomechanicsMetrics] {
-        var results: [BiomechanicsMetrics] = []
-
-        for swing in swings {
-            let swingFrames = allFrames.filter { frame in
-                frame.timestamp >= swing.startTime && frame.timestamp <= swing.endTime
-            }
-
-            if let metrics = analyzeSwing(frames: swingFrames, swingData: swing) {
-                results.append(metrics)
-            }
-        }
-
-        return results
-    }
 }

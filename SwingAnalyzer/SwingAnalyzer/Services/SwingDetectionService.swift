@@ -22,19 +22,6 @@ class SwingDetectionService {
             .sorted { $0.startTime < $1.startTime }
     }
 
-    func detectSwings(
-        from frames: [FrameJointData],
-        velocities: [Int: [String: Double]],
-        configuration: SwingDetectionConfiguration
-    ) -> [SwingData] {
-        let candidates = detectCandidates(from: frames, velocities: velocities, configuration: configuration)
-        let selectedCount = configuration.expectedSwingCount > 0 ? configuration.expectedSwingCount : candidates.count
-
-        return Array(candidates.prefix(selectedCount))
-            .map(\.swing)
-            .sorted { $0.startTime < $1.startTime }
-    }
-
     func detectCandidates(
         from frames: [FrameJointData],
         velocities: [Int: [String: Double]],
@@ -251,47 +238,5 @@ class SwingDetectionService {
         guard !jointVelocities.isEmpty else { return 0 }
 
         return jointVelocities.reduce(0, +) / Double(jointVelocities.count)
-    }
-
-    // MARK: - Get Frames for Swing
-
-    func getFrames(for swing: SwingData, from allFrames: [FrameJointData]) -> [FrameJointData] {
-        return allFrames.filter { frame in
-            frame.timestamp >= swing.startTime && frame.timestamp <= swing.endTime
-        }
-    }
-
-    // MARK: - Detect Rotation
-
-    func detectHipRotation(frames: [FrameJointData]) -> Double {
-        guard frames.count >= 2 else { return 0 }
-
-        var firstFrame: FrameJointData?
-        var lastFrame: FrameJointData?
-
-        for frame in frames {
-            if frame.joints["left_hip"] != nil && frame.joints["right_hip"] != nil {
-                if firstFrame == nil {
-                    firstFrame = frame
-                }
-                lastFrame = frame
-            }
-        }
-
-        guard let first = firstFrame,
-              let last = lastFrame,
-              let firstLeftHip = first.joints["left_hip"],
-              let firstRightHip = first.joints["right_hip"],
-              let lastLeftHip = last.joints["left_hip"],
-              let lastRightHip = last.joints["right_hip"] else {
-            return 0
-        }
-
-        return BiomechanicsCalculations.calculateHipRotation(
-            leftHip: lastLeftHip,
-            rightHip: lastRightHip,
-            referenceLeftHip: firstLeftHip,
-            referenceRightHip: firstRightHip
-        )
     }
 }

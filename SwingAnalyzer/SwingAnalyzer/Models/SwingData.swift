@@ -10,12 +10,6 @@ struct SwingData {
     }
 }
 
-struct JointPosition {
-    let name: String
-    let point: CGPoint
-    let confidence: Float
-}
-
 struct FrameJointData {
     let frameNumber: Int
     let timestamp: Double

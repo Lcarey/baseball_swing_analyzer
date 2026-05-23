@@ -70,44 +70,7 @@ struct BiomechanicsCalculations {
         return dist / timeInterval
     }
 
-    // MARK: - Smoothing
-
-    /// Apply moving average smoothing to an array of points
-    static func smoothPoints(_ points: [CGPoint], windowSize: Int = 3) -> [CGPoint] {
-        guard points.count >= windowSize else { return points }
-
-        var smoothed: [CGPoint] = []
-        let halfWindow = windowSize / 2
-
-        for i in 0..<points.count {
-            let start = max(0, i - halfWindow)
-            let end = min(points.count, i + halfWindow + 1)
-
-            var sumX: CGFloat = 0
-            var sumY: CGFloat = 0
-            var count = 0
-
-            for j in start..<end {
-                sumX += points[j].x
-                sumY += points[j].y
-                count += 1
-            }
-
-            smoothed.append(CGPoint(x: sumX / CGFloat(count), y: sumY / CGFloat(count)))
-        }
-
-        return smoothed
-    }
-
     // MARK: - Coordinate Conversion
-
-    /// Convert normalized coordinates (0-1) to pixel coordinates
-    static func normalizedToPixel(point: CGPoint, imageSize: CGSize) -> CGPoint {
-        return CGPoint(
-            x: point.x * imageSize.width,
-            y: (1.0 - point.y) * imageSize.height // Vision framework uses bottom-left origin
-        )
-    }
 
     /// Convert normalized distance to real-world inches (approximate)
     /// This is a rough estimate assuming person is ~6 feet tall and takes ~40% of frame height
