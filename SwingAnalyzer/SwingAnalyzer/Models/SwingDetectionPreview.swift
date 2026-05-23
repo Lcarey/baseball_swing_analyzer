@@ -15,10 +15,13 @@ struct SwingDetectionPreviewResult {
     let frames: [FrameJointData]
     let allCandidates: [SwingDetectionCandidate]
     let selectedCandidates: [SwingDetectionCandidate]
-    let metrics: [BiomechanicsMetrics]
+    let analysisResults: [SwingAnalysisResult]
+
+    var metrics: [BiomechanicsMetrics] {
+        analysisResults.map(\.legacyMetrics)
+    }
 
     var proposedSwings: [SwingData] {
         selectedCandidates.map(\.swing)
     }
 }
-

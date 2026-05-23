@@ -1,15 +1,38 @@
 import Foundation
 
-struct BiomechanicsMetrics {
+struct BiomechanicsMetrics: Codable, Equatable {
     let kneeBend: Double // degrees
     let hipRotation: Double // degrees
     let hipHorizontalMovement: Double // inches
     let hipVerticalMovement: Double // inches
     let hipShoulderAlignment: Double // percentage 0-100
     let timeToContact: Double // seconds
+    let scoreBreakdown: SwingScoreBreakdown?
+
+    init(
+        kneeBend: Double,
+        hipRotation: Double,
+        hipHorizontalMovement: Double,
+        hipVerticalMovement: Double,
+        hipShoulderAlignment: Double,
+        timeToContact: Double,
+        scoreBreakdown: SwingScoreBreakdown? = nil
+    ) {
+        self.kneeBend = kneeBend
+        self.hipRotation = hipRotation
+        self.hipHorizontalMovement = hipHorizontalMovement
+        self.hipVerticalMovement = hipVerticalMovement
+        self.hipShoulderAlignment = hipShoulderAlignment
+        self.timeToContact = timeToContact
+        self.scoreBreakdown = scoreBreakdown
+    }
 
     var compositeScore: Double {
-        calculateCompositeScore()
+        if let scoreBreakdown {
+            return scoreBreakdown.finalScore
+        }
+
+        return calculateCompositeScore()
     }
 
     private func calculateCompositeScore() -> Double {

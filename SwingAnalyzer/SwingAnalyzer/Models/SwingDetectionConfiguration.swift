@@ -80,6 +80,7 @@ struct SwingDetectionConfiguration: Codable, Equatable {
         )
     }
 
+#if !SWING_CALIBRATION_CLI
     static func forSession(_ session: Session) -> SwingDetectionConfiguration {
         if let savedConfiguration = session.lastDetectionConfiguration {
             return savedConfiguration
@@ -88,6 +89,7 @@ struct SwingDetectionConfiguration: Codable, Equatable {
         let currentCount = Int(session.swingCount)
         return .balanced(expectedSwingCount: currentCount > 0 ? currentCount : 1)
     }
+#endif
 
     func applyingSensitivityPreset(_ preset: SwingDetectionSensitivityPreset) -> SwingDetectionConfiguration {
         var configuration = self
@@ -179,4 +181,3 @@ struct SwingDetectionConfiguration: Codable, Equatable {
         return try? JSONDecoder().decode(SwingDetectionConfiguration.self, from: data)
     }
 }
-

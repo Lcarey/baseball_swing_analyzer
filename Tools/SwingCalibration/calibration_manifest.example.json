@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "videos": [
+    {
+      "path": "/Users/lcarey/Desktop/test images and videos/example good swings/smaller videos of good swings/BP_000004.mov",
+      "label": "good",
+      "expectedSwingCount": 1,
+      "handedness": "right",
+      "cameraAngle": "side",
+      "reviewOnly": false
+    },
+    {
+      "path": "/Users/lcarey/Desktop/test images and videos/example good swings/smaller videos of good swings/RH Hitters - side view [JLJi8aos16Q].mkv",
+      "label": "good",
+      "expectedSwingCount": 0,
+      "handedness": "right",
+      "cameraAngle": "side",
+      "reviewOnly": true
+    }
+  ]
+}

@@ -10,10 +10,21 @@ class PoseDetectionService: ObservableObject {
 
     private let confidenceThreshold: Float = AppConstants.confidenceThreshold
 
-    enum PoseError: Error {
+    enum PoseError: Error, LocalizedError {
         case invalidVideoURL
         case trackReaderFailed
         case poseDetectionFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidVideoURL:
+                return "No readable video track was found."
+            case .trackReaderFailed:
+                return "The video track reader could not start."
+            case .poseDetectionFailed:
+                return "Pose detection failed."
+            }
+        }
     }
 
     // MARK: - Process Video
@@ -43,6 +54,11 @@ class PoseDetectionService: ObservableObject {
                 }
             }
         }
+    }
+
+    func processVideoSynchronously(url: URL) throws -> [FrameJointData] {
+        let asset = AVAsset(url: url)
+        return try extractPoseData(from: asset)
     }
 
     // MARK: - Extract Pose Data

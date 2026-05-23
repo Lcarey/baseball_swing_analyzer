@@ -55,6 +55,11 @@ struct SessionAverageView: View {
                         .padding(.horizontal)
                 }
 
+                if let coachSummary = SwingCoachAdviceFactory.summary(for: session) {
+                    SessionCoachSummaryCard(summary: coachSummary)
+                        .padding(.horizontal)
+                }
+
                 // Average Score Circle
                 if !swings.isEmpty {
                     VStack(spacing: 12) {
@@ -74,7 +79,7 @@ struct SessionAverageView: View {
                 // Average Metrics
                 if let metrics = averageMetrics {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Average Metrics")
+                        Text("Metrics Dashboard")
                             .font(.headline)
                             .padding(.horizontal)
 
@@ -188,6 +193,115 @@ struct NoSwingsDetectedView: View {
         .padding()
         .background(Color(UIColor.secondarySystemBackground))
         .cornerRadius(12)
+    }
+}
+
+// MARK: - Session Coach Summary
+
+struct SessionCoachSummaryCard: View {
+    let summary: SessionCoachSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Session Plan", systemImage: "list.clipboard.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(summary.headline)
+                    .font(.title3.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(summary.subheadline)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                SessionCoachRow(
+                    icon: "target",
+                    title: "Today's Focus",
+                    detail: "\(summary.todayFocusTitle): \(summary.todayFocusDetail)",
+                    color: AppConstants.colorOrange
+                )
+
+                Divider()
+
+                SessionCoachRow(
+                    icon: "figure.baseball",
+                    title: "Practice Cue",
+                    detail: summary.todayDrill,
+                    color: AppConstants.colorGreen
+                )
+
+                Divider()
+
+                SessionCoachRow(
+                    icon: "rosette",
+                    title: "Best Rep",
+                    detail: summary.bestSwingText,
+                    color: AppConstants.colorOrange
+                )
+
+                Divider()
+
+                SessionCoachRow(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "Repeatability",
+                    detail: summary.consistencyText,
+                    color: .secondary
+                )
+
+                Divider()
+
+                SessionCoachRow(
+                    icon: "checkmark.seal.fill",
+                    title: "Keep",
+                    detail: summary.strengthText,
+                    color: AppConstants.colorGreen
+                )
+            }
+
+            if let confidenceText = summary.confidenceText {
+                Label(confidenceText, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+struct SessionCoachRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(color)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(detail)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 }
 

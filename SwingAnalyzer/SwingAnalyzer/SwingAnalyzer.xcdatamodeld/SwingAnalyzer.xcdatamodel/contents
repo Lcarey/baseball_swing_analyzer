@@ -33,12 +33,17 @@
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Session" inverseName="swings" inverseEntity="Session"/>
     </entity>
     <entity name="SwingMetrics" representedClassName="SwingMetrics" syncable="YES">
+        <attribute name="advancedMetricsJSON" optional="YES" attributeType="String"/>
+        <attribute name="analysisVersion" optional="YES" attributeType="String"/>
         <attribute name="hipHorizontalMovement" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="hipRotation" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="hipShoulderAlignment" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="hipVerticalMovement" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="kneeBend" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="phaseMarkersJSON" optional="YES" attributeType="String"/>
+        <attribute name="scoreBreakdownJSON" optional="YES" attributeType="String"/>
+        <attribute name="scoreConfidence" optional="YES" attributeType="String"/>
         <attribute name="timeToContact" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <relationship name="swing" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Swing" inverseName="metrics" inverseEntity="Swing"/>
     </entity>

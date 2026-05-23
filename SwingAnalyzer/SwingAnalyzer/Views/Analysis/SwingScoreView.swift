@@ -19,6 +19,9 @@ struct SwingScoreView: View {
                 SwingReportSummaryCard(swing: swing)
                     .padding(.horizontal)
 
+                SwingCoachCard(swing: swing)
+                    .padding(.horizontal)
+
                 if let metrics {
                     DetailedMetricsReportView(metrics: metrics)
                         .padding(.horizontal)
@@ -38,6 +41,144 @@ struct SwingScoreView: View {
         .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle("Swing Report")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Coach Take
+
+struct SwingCoachCard: View {
+    let swing: Swing
+
+    private var summary: SwingCoachSummary {
+        SwingCoachAdviceFactory.summary(for: swing)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Coach's Take", systemImage: "person.fill.checkmark")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(summary.headline)
+                    .font(.title3.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(summary.subheadline)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let personalBestMessage = summary.personalBestMessage {
+                Label(personalBestMessage, systemImage: "rosette")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppConstants.colorOrange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let confidenceMessage = summary.confidenceMessage {
+                Label(confidenceMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(UIColor.tertiarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+            VStack(spacing: 10) {
+                ForEach(summary.priorities) { priority in
+                    CoachPriorityCard(priority: priority)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundColor(AppConstants.colorGreen)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(summary.keepDoingTitle)
+                        .font(.subheadline.weight(.semibold))
+
+                    Text(summary.keepDoingDetail)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(AppConstants.colorGreen.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+struct CoachPriorityCard: View {
+    let priority: SwingCoachPriority
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: priority.iconName)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(priority.color.color)
+                    .frame(width: 38, height: 38)
+                    .background(priority.color.color.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(priority.title)
+                        .font(.headline)
+                        .lineLimit(2)
+
+                    Text(priority.playerCue)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(priority.color.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                if let scoreText = priority.scoreText {
+                    Text(scoreText)
+                        .font(.caption.monospacedDigit().weight(.bold))
+                        .foregroundColor(priority.color.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(priority.color.color.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+
+            Text(priority.coachDetail)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label(priority.drillTitle, systemImage: "figure.baseball")
+                    .font(.caption.weight(.semibold))
+
+                Text(priority.drillDetail)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(UIColor.tertiarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .padding(12)
+        .background(Color(UIColor.systemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -62,6 +203,12 @@ struct SwingReportSummaryCard: View {
                     Text("Based on this swing")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if let confidence = swing.metrics?.decodedScoreConfidence {
+                        Label("\(confidence.displayName) confidence", systemImage: confidence.systemImage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(confidence.color)
+                    }
                 }
 
                 Spacer()
@@ -159,9 +306,17 @@ struct DetailedMetricsReportView: View {
     let metrics: SwingMetrics
 
     private var reportItems: [MetricReportItem] {
+        if let advancedMetrics = metrics.decodedAdvancedMetrics {
+            return advancedReportItems(from: advancedMetrics)
+        }
+
+        return legacyReportItems
+    }
+
+    private var legacyReportItems: [MetricReportItem] {
         [
             MetricReportItem(
-                type: .kneeBend,
+                id: "legacy_knee_bend",
                 title: "Knee Bend",
                 value: "\(Int(metrics.kneeBend.rounded()))°",
                 icon: "figure.strengthtraining.traditional",
@@ -170,7 +325,7 @@ struct DetailedMetricsReportView: View {
                 color: metricColor(for: .kneeBend)
             ),
             MetricReportItem(
-                type: .hipRotation,
+                id: "legacy_hip_rotation",
                 title: "Hip Rotation",
                 value: "\(Int(metrics.hipRotation.rounded()))°",
                 icon: "arrow.triangle.2.circlepath",
@@ -179,7 +334,7 @@ struct DetailedMetricsReportView: View {
                 color: metricColor(for: .hipRotation)
             ),
             MetricReportItem(
-                type: .hipHorizontalMovement,
+                id: "legacy_hip_horizontal_movement",
                 title: "Hip Horizontal Mvmt.",
                 value: String(format: "%.1f\"", metrics.hipHorizontalMovement),
                 icon: "arrow.left.and.right",
@@ -188,7 +343,7 @@ struct DetailedMetricsReportView: View {
                 color: metricColor(for: .hipHorizontalMovement)
             ),
             MetricReportItem(
-                type: .hipVerticalMovement,
+                id: "legacy_hip_vertical_movement",
                 title: "Hip Vertical Mvmt.",
                 value: String(format: "%.1f\"", metrics.hipVerticalMovement),
                 icon: "arrow.up.and.down",
@@ -197,7 +352,7 @@ struct DetailedMetricsReportView: View {
                 color: metricColor(for: .hipVerticalMovement)
             ),
             MetricReportItem(
-                type: .hipShoulderAlignment,
+                id: "legacy_hip_shoulder_alignment",
                 title: "Hip-Shoulder Alignment",
                 value: "\(Int(metrics.hipShoulderAlignment.rounded()))%",
                 icon: "bolt.fill",
@@ -206,7 +361,7 @@ struct DetailedMetricsReportView: View {
                 color: metricColor(for: .hipShoulderAlignment)
             ),
             MetricReportItem(
-                type: .timeToContact,
+                id: "legacy_time_to_contact",
                 title: "Time to Contact",
                 value: String(format: "%.2fs", metrics.timeToContact),
                 icon: "stopwatch.fill",
@@ -219,7 +374,7 @@ struct DetailedMetricsReportView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Metrics")
+            Text("Metrics Dashboard")
                 .font(.title2.bold())
 
             VStack(spacing: 12) {
@@ -227,7 +382,91 @@ struct DetailedMetricsReportView: View {
                     MetricReportCard(item: item)
                 }
             }
+
+            if let breakdown = metrics.decodedScoreBreakdown, !breakdown.warnings.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Score Caveats")
+                        .font(.headline)
+
+                    ForEach(breakdown.warnings, id: \.self) { warning in
+                        Label(warning, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
         }
+    }
+
+    private func advancedReportItems(from advanced: AdvancedSwingMetrics) -> [MetricReportItem] {
+        [
+            MetricReportItem(
+                id: "hip_shoulder_separation",
+                title: "Hip-Shoulder Separation",
+                value: "\(Int(abs(advanced.hipShoulderSeparationAtFirstMove).rounded()))°",
+                icon: "bolt.fill",
+                target: "Target: 4°-18° 2D stretch, near 0° at contact",
+                detail: String(format: "First move %.0f°, contact %.0f°. This replaces the old static alignment score and is calibrated to the local good-example videos.", advanced.hipShoulderSeparationAtFirstMove, advanced.hipShoulderSeparationAtContact),
+                color: color(forComponent: "hip_shoulder_separation")
+            ),
+            MetricReportItem(
+                id: "pelvis_rotation_contact",
+                title: "Pelvis Rotation",
+                value: "\(Int(advanced.pelvisRotationAtContact.rounded()))°",
+                icon: "arrow.triangle.2.circlepath",
+                target: "Target: 15°-45° in this 2D estimate",
+                detail: "Side-view estimate calibrated to the local good-example videos; true 3D literature targets are higher.",
+                color: color(forComponent: "pelvis_rotation_contact")
+            ),
+            MetricReportItem(
+                id: "torso_rotation_contact",
+                title: "Torso Rotation",
+                value: "\(Int(advanced.torsoRotationAtContact.rounded()))°",
+                icon: "figure.core.training",
+                target: "Target: 15°-45° in this 2D estimate",
+                detail: "Tracks shoulder-line rotation at the contact estimate, calibrated to the local good-example videos.",
+                color: color(forComponent: "torso_rotation_contact")
+            ),
+            MetricReportItem(
+                id: "time_to_contact",
+                title: "Time to Contact",
+                value: String(format: "%.2fs", advanced.timeToContact),
+                icon: "stopwatch.fill",
+                target: "Target: 0.08s-0.50s in the detected swing window",
+                detail: "Measured from detector start to peak hand-speed contact estimate; true Blast-style timing needs a confirmed pitch/contact event.",
+                color: color(forComponent: "time_to_contact")
+            ),
+            MetricReportItem(
+                id: "lead_leg",
+                title: "Lead Leg",
+                value: "\(Int(advanced.leadKneeExtensionToContact.rounded()))°",
+                icon: "figure.strengthtraining.traditional",
+                target: "Target: flexed at heel strike, extends into contact",
+                detail: String(format: "Lead knee flexion moved from %.0f° to %.0f°.", advanced.leadKneeFlexionAtHeelStrike, advanced.leadKneeFlexionAtContact),
+                color: color(forComponent: "lead_leg")
+            ),
+            MetricReportItem(
+                id: "posture",
+                title: "Posture",
+                value: "\(Int(advanced.torsoForwardBendAtHeelStrike.rounded()))°",
+                icon: "figure.stand",
+                target: "Target: 5°-40° bend at heel strike, near upright at contact",
+                detail: String(format: "Forward bend at contact was %.0f°. Side bend is not reliable from side-only 2D video.", advanced.torsoForwardBendAtContact),
+                color: color(forComponent: "posture")
+            ),
+            MetricReportItem(
+                id: "pelvis_thrust_proxy",
+                title: "Pelvis Thrust Proxy",
+                value: String(format: "%.2f", advanced.pelvisThrustProxy),
+                icon: "arrow.up.forward",
+                target: "Target: controlled hip-center move into contact",
+                detail: "A 2D proxy because true pelvis tilt needs 3D sensors.",
+                color: color(forComponent: "pelvis_thrust_proxy")
+            )
+        ]
     }
 
     private func metricColor(for type: MetricType) -> MetricColor {
@@ -242,18 +481,30 @@ struct DetailedMetricsReportView: View {
 
         return metricsModel.getMetricColor(for: type)
     }
+
+    private func color(forComponent id: String) -> MetricColor {
+        guard let score = metrics.decodedScoreBreakdown?.components.first(where: { $0.id == id })?.score else {
+            return .orange
+        }
+
+        if score >= 85 {
+            return .green
+        } else if score >= 60 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
 }
 
 struct MetricReportItem: Identifiable {
-    let type: MetricType
+    let id: String
     let title: String
     let value: String
     let icon: String
     let target: String
     let detail: String
     let color: MetricColor
-
-    var id: MetricType { type }
 }
 
 struct MetricReportCard: View {
@@ -314,27 +565,56 @@ struct AlignmentReportView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hip-Shoulder Alignment Chart")
+            Text(metrics.decodedAdvancedMetrics == nil ? "Hip-Shoulder Alignment Chart" : "Phase Timing")
                 .font(.title2.bold())
 
             VStack(spacing: 16) {
-                MetricProgressBar(
-                    title: "Hip rotation",
-                    value: metrics.hipRotation,
-                    target: 75,
-                    maximum: 120,
-                    suffix: "°",
-                    color: color(for: .hipRotation)
-                )
+                if let advanced = metrics.decodedAdvancedMetrics {
+                    MetricProgressBar(
+                        title: "X-factor stretch",
+                        value: abs(advanced.hipShoulderSeparationAtFirstMove),
+                        target: 40,
+                        maximum: 70,
+                        suffix: "°",
+                        color: color(forComponent: "hip_shoulder_separation")
+                    )
 
-                MetricProgressBar(
-                    title: "Hip-shoulder alignment",
-                    value: metrics.hipShoulderAlignment,
-                    target: 90,
-                    maximum: 100,
-                    suffix: "%",
-                    color: color(for: .hipShoulderAlignment)
-                )
+                    MetricProgressBar(
+                        title: "Contact closure",
+                        value: max(0, 25 - abs(advanced.hipShoulderSeparationAtContact)),
+                        target: 20,
+                        maximum: 25,
+                        suffix: "",
+                        color: color(forComponent: "hip_shoulder_separation")
+                    )
+
+                    MetricProgressBar(
+                        title: "Peak hand speed",
+                        value: advanced.peakHandVelocity,
+                        target: 1.2,
+                        maximum: 2.5,
+                        suffix: "",
+                        color: AppConstants.colorGreen
+                    )
+                } else {
+                    MetricProgressBar(
+                        title: "Hip rotation",
+                        value: metrics.hipRotation,
+                        target: 75,
+                        maximum: 120,
+                        suffix: "°",
+                        color: color(for: .hipRotation)
+                    )
+
+                    MetricProgressBar(
+                        title: "Hip-shoulder alignment",
+                        value: metrics.hipShoulderAlignment,
+                        target: 90,
+                        maximum: 100,
+                        suffix: "%",
+                        color: color(for: .hipShoulderAlignment)
+                    )
+                }
             }
             .padding()
             .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -353,6 +633,20 @@ struct AlignmentReportView: View {
         )
 
         return metricsModel.getMetricColor(for: type).color
+    }
+
+    private func color(forComponent id: String) -> Color {
+        guard let score = metrics.decodedScoreBreakdown?.components.first(where: { $0.id == id })?.score else {
+            return AppConstants.colorOrange
+        }
+
+        if score >= 85 {
+            return AppConstants.colorGreen
+        } else if score >= 60 {
+            return AppConstants.colorOrange
+        } else {
+            return AppConstants.colorRed
+        }
     }
 }
 
@@ -544,6 +838,30 @@ extension MetricColor {
             return "Watch"
         case .red:
             return "Needs work"
+        }
+    }
+}
+
+extension ScoreConfidence {
+    var color: Color {
+        switch self {
+        case .high:
+            return AppConstants.colorGreen
+        case .medium:
+            return AppConstants.colorOrange
+        case .low:
+            return AppConstants.colorRed
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .high:
+            return "checkmark.seal.fill"
+        case .medium:
+            return "exclamationmark.triangle.fill"
+        case .low:
+            return "xmark.octagon.fill"
         }
     }
 }

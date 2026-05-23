@@ -108,7 +108,7 @@ class SwingAnalysisViewModel: ObservableObject {
 
             let saved = self.saveSwings(
                 swings: previewResult.proposedSwings,
-                metrics: previewResult.metrics,
+                analysisResults: previewResult.analysisResults,
                 frames: previewResult.frames,
                 videoURL: previewResult.videoURL,
                 session: session,
@@ -161,12 +161,12 @@ class SwingAnalysisViewModel: ObservableObject {
             }
 
             // Analyze each swing
-            let metricsResults = self.metricsForSwings(swings, frames: frames)
+            let analysisResults = self.analysisResultsForSwings(swings, frames: frames)
 
             // Save to Core Data
             self.saveSwings(
                 swings: swings,
-                metrics: metricsResults,
+                analysisResults: analysisResults,
                 frames: frames,
                 videoURL: videoURL,
                 session: session,
@@ -215,14 +215,14 @@ class SwingAnalysisViewModel: ObservableObject {
             let selectedCandidates = Array(candidates.prefix(configuration.expectedSwingCount))
                 .sorted { $0.swing.startTime < $1.swing.startTime }
             let selectedSwings = selectedCandidates.map(\.swing)
-            let metrics = self.metricsForSwings(selectedSwings, frames: frames)
+            let analysisResults = self.analysisResultsForSwings(selectedSwings, frames: frames)
             let preview = SwingDetectionPreviewResult(
                 configuration: configuration,
                 videoURL: videoURL,
                 frames: frames,
                 allCandidates: candidates,
                 selectedCandidates: selectedCandidates,
-                metrics: metrics
+                analysisResults: analysisResults
             )
 
             DispatchQueue.main.async {
@@ -255,7 +255,7 @@ class SwingAnalysisViewModel: ObservableObject {
     @discardableResult
     private func saveSwings(
         swings: [SwingData],
-        metrics: [BiomechanicsMetrics],
+        analysisResults: [SwingAnalysisResult],
         frames: [FrameJointData],
         videoURL: URL,
         session: Session,
@@ -282,8 +282,9 @@ class SwingAnalysisViewModel: ObservableObject {
                 swing.session = session
 
                 // Get metrics for this swing
-                if index < metrics.count {
-                    let swingMetrics = metrics[index]
+                if index < analysisResults.count {
+                    let analysisResult = analysisResults[index]
+                    let swingMetrics = analysisResult.legacyMetrics
 
                     // Create SwingMetrics entity
                     let metricsEntity = SwingMetrics(context: context)
@@ -294,10 +295,15 @@ class SwingAnalysisViewModel: ObservableObject {
                     metricsEntity.hipVerticalMovement = swingMetrics.hipVerticalMovement
                     metricsEntity.hipShoulderAlignment = swingMetrics.hipShoulderAlignment
                     metricsEntity.timeToContact = swingMetrics.timeToContact
+                    metricsEntity.analysisVersion = analysisResult.scoreBreakdown.analysisVersion
+                    metricsEntity.scoreConfidence = analysisResult.scoreBreakdown.confidence.rawValue
+                    metricsEntity.scoreBreakdownJSON = analysisResult.scoreBreakdown.encodedJSONString
+                    metricsEntity.phaseMarkersJSON = analysisResult.phaseMarkers.encodedJSONString
+                    metricsEntity.advancedMetricsJSON = analysisResult.advancedMetrics.encodedJSONString
                     metricsEntity.swing = swing
 
                     // Calculate and store score
-                    swing.score = swingMetrics.compositeScore
+                    swing.score = analysisResult.scoreBreakdown.finalScore
                 }
 
                 // Save joint data for this swing
@@ -320,8 +326,8 @@ class SwingAnalysisViewModel: ObservableObject {
             session.lastDetectionSettingsJSON = configuration?.settingsJSON ?? session.lastDetectionSettingsJSON
             if !swings.isEmpty {
                 let totalScore = swings.enumerated().reduce(0.0) { total, item in
-                    if item.offset < metrics.count {
-                        return total + metrics[item.offset].compositeScore
+                    if item.offset < analysisResults.count {
+                        return total + analysisResults[item.offset].scoreBreakdown.finalScore
                     }
                     return total
                 }
@@ -343,21 +349,86 @@ class SwingAnalysisViewModel: ObservableObject {
         return didSave
     }
 
-    private func metricsForSwings(_ swings: [SwingData], frames: [FrameJointData]) -> [BiomechanicsMetrics] {
+    private func analysisResultsForSwings(_ swings: [SwingData], frames: [FrameJointData]) -> [SwingAnalysisResult] {
         swings.map { swing in
             let swingFrames = frames.filter { frame in
                 frame.timestamp >= swing.startTime && frame.timestamp <= swing.endTime
             }
 
-            return biomechanicsAnalyzer.analyzeSwing(frames: swingFrames, swingData: swing) ?? BiomechanicsMetrics(
-                kneeBend: 0,
-                hipRotation: 0,
-                hipHorizontalMovement: 0,
-                hipVerticalMovement: 0,
-                hipShoulderAlignment: 0,
-                timeToContact: 0
-            )
+            return biomechanicsAnalyzer.analyzeSwing(
+                frames: swingFrames,
+                swingData: swing,
+                context: .youthHighSchoolDefault
+            ) ?? fallbackAnalysisResult(for: swing)
         }
+    }
+
+    private func fallbackAnalysisResult(for swing: SwingData) -> SwingAnalysisResult {
+        let phaseMarkers = SwingPhaseMarkers(
+            setupTime: swing.startTime,
+            heelStrikeTime: swing.startTime,
+            firstMoveTime: swing.startTime,
+            contactTime: swing.peakVelocityTime,
+            setupFrame: 0,
+            heelStrikeFrame: 0,
+            firstMoveFrame: 0,
+            contactFrame: 0
+        )
+        let advancedMetrics = AdvancedSwingMetrics(
+            hipShoulderSeparationAtFirstMove: 0,
+            hipShoulderSeparationAtContact: 0,
+            pelvisRotationAtContact: 0,
+            torsoRotationAtContact: 0,
+            leadKneeFlexionAtHeelStrike: 0,
+            leadKneeFlexionAtContact: 0,
+            leadKneeExtensionToContact: 0,
+            timeToContact: max(0, swing.peakVelocityTime - swing.startTime),
+            torsoForwardBendAtHeelStrike: 0,
+            torsoForwardBendAtContact: 0,
+            pelvisThrustProxy: 0,
+            peakPelvisAngularVelocity: 0,
+            peakTorsoAngularVelocity: 0,
+            peakHandVelocity: 0,
+            hipHorizontalMovement: 0,
+            hipVerticalMovement: 0
+        )
+        let poseQuality = PoseQualityReport(
+            totalFrames: 0,
+            framesWithCoreJoints: 0,
+            keyJointAvailability: 0,
+            detectionRate: 0,
+            jitterScore: 0,
+            confidence: .low,
+            warnings: ["Not enough pose frames to calculate biomechanics."]
+        )
+        let scoreBreakdown = SwingScoreBreakdown(
+            analysisVersion: "scoring_v2_youth_hs",
+            profileID: SwingScoringProfile.youthHighSchoolDefault.id,
+            profileName: SwingScoringProfile.youthHighSchoolDefault.displayName,
+            rawScore: 0,
+            finalScore: 0,
+            confidence: .low,
+            components: [],
+            warnings: poseQuality.warnings
+        )
+        let metrics = BiomechanicsMetrics(
+            kneeBend: 0,
+            hipRotation: 0,
+            hipHorizontalMovement: 0,
+            hipVerticalMovement: 0,
+            hipShoulderAlignment: 0,
+            timeToContact: advancedMetrics.timeToContact,
+            scoreBreakdown: scoreBreakdown
+        )
+
+        return SwingAnalysisResult(
+            legacyMetrics: metrics,
+            advancedMetrics: advancedMetrics,
+            phaseMarkers: phaseMarkers,
+            poseQuality: poseQuality,
+            scoreBreakdown: scoreBreakdown,
+            warnings: poseQuality.warnings
+        )
     }
 
     // MARK: - Encode Joints
