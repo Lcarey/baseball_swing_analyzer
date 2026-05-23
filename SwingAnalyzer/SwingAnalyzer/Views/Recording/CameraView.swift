@@ -88,17 +88,18 @@ struct CameraView: View {
             }
 
             // Authorization overlay
-            if !viewModel.checkCameraAuthorization() {
+            if !viewModel.isAuthorized {
                 CameraAuthorizationView {
                     viewModel.requestCameraAccess()
                 }
             }
         }
         .onAppear {
-            if viewModel.checkCameraAuthorization() {
-                viewModel.setupCamera()
-                viewModel.createSession()
-            }
+            setupCameraIfAuthorized()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // Recheck authorization when returning from Settings
+            setupCameraIfAuthorized()
         }
         .onDisappear {
             viewModel.cleanup()
@@ -123,6 +124,16 @@ struct CameraView: View {
                 }
             } else {
                 dismiss()
+            }
+        }
+    }
+
+    private func setupCameraIfAuthorized() {
+        viewModel.checkCameraAuthorization()
+        if viewModel.isAuthorized {
+            viewModel.setupCamera()
+            if viewModel.session == nil {
+                viewModel.createSession()
             }
         }
     }

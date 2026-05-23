@@ -43,16 +43,19 @@ class CameraService: NSObject, ObservableObject {
     // MARK: - Authorization
 
     func checkAuthorization() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            isAuthorized = true
-        case .notDetermined:
-            requestAuthorization()
-        case .denied, .restricted:
-            isAuthorized = false
-            error = .unauthorized
-        @unknown default:
-            isAuthorized = false
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        DispatchQueue.main.async {
+            switch status {
+            case .authorized:
+                self.isAuthorized = true
+            case .notDetermined:
+                self.isAuthorized = false
+            case .denied, .restricted:
+                self.isAuthorized = false
+                self.error = .unauthorized
+            @unknown default:
+                self.isAuthorized = false
+            }
         }
     }
 

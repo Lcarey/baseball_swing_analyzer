@@ -9,6 +9,7 @@ class RecordingViewModel: ObservableObject {
     @Published var captureSession: AVCaptureSession?
     @Published var error: String?
     @Published var showError = false
+    @Published var isAuthorized = false
 
     private let cameraService = CameraService()
     private var cancellables = Set<AnyCancellable>()
@@ -30,6 +31,10 @@ class RecordingViewModel: ObservableObject {
         cameraService.$recordingDuration
             .receive(on: DispatchQueue.main)
             .assign(to: &$recordingDuration)
+
+        cameraService.$isAuthorized
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isAuthorized)
 
         cameraService.$error
             .receive(on: DispatchQueue.main)
@@ -60,11 +65,16 @@ class RecordingViewModel: ObservableObject {
     }
 
     func checkCameraAuthorization() -> Bool {
+        cameraService.checkAuthorization()
         return cameraService.isAuthorized
     }
 
     func requestCameraAccess() {
         cameraService.requestAuthorization()
+        // Recheck after a delay to pick up changes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.cameraService.checkAuthorization()
+        }
     }
 
     // MARK: - Recording Control
