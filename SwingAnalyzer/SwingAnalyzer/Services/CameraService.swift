@@ -387,30 +387,13 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     private func extractLiveJointPoints(from observation: VNHumanBodyPoseObservation) -> [String: CGPoint]? {
         var joints: [String: CGPoint] = [:]
 
-        let jointNames: [VNHumanBodyPoseObservation.JointName] = [
-            .nose,
-            .neck,
-            .leftShoulder,
-            .rightShoulder,
-            .leftElbow,
-            .rightElbow,
-            .leftWrist,
-            .rightWrist,
-            .leftHip,
-            .rightHip,
-            .leftKnee,
-            .rightKnee,
-            .leftAnkle,
-            .rightAnkle
-        ]
-
-        for jointName in jointNames {
+        for jointName in VisionJointMapping.trackedJointNames {
             guard let point = try? observation.recognizedPoint(jointName),
                   point.confidence > confidenceThreshold else {
                 continue
             }
 
-            joints[jointName.rawValue.rawValue] = point.location
+            joints[VisionJointMapping.appKey(for: jointName)] = point.location
         }
 
         return joints.count >= 8 ? joints : nil

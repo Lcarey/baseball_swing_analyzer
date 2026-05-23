@@ -130,30 +130,13 @@ class PoseDetectionService: ObservableObject {
     private func extractJointPoints(from observation: VNHumanBodyPoseObservation) -> [String: CGPoint]? {
         var joints: [String: CGPoint] = [:]
 
-        let jointNames: [VNHumanBodyPoseObservation.JointName] = [
-            .nose,
-            .neck,
-            .leftShoulder,
-            .rightShoulder,
-            .leftElbow,
-            .rightElbow,
-            .leftWrist,
-            .rightWrist,
-            .leftHip,
-            .rightHip,
-            .leftKnee,
-            .rightKnee,
-            .leftAnkle,
-            .rightAnkle
-        ]
-
-        for jointName in jointNames {
+        for jointName in VisionJointMapping.trackedJointNames {
             guard let point = try? observation.recognizedPoint(jointName),
                   point.confidence > confidenceThreshold else {
                 continue
             }
 
-            let key = jointName.rawValue.rawValue
+            let key = VisionJointMapping.appKey(for: jointName)
             joints[key] = CGPoint(x: point.location.x, y: point.location.y)
         }
 
