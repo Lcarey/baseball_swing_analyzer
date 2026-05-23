@@ -32,19 +32,36 @@ struct SessionAverageView: View {
                 .padding(.horizontal)
                 .padding(.top)
 
-                // Average Score Circle
-                VStack(spacing: 12) {
-                    ScoreCircleView(score: Int(session.averageScore))
-
-                    Text("Average Score")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Text("Based on \(swings.count) swing\(swings.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                if let recordingURL = session.recordingFileURL {
+                    NavigationLink(destination: VideoPlaybackView(videoURL: recordingURL)) {
+                        Label("Play Recording", systemImage: "play.circle.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.horizontal)
                 }
-                .padding()
+
+                if swings.isEmpty {
+                    NoSwingsDetectedView()
+                        .padding(.horizontal)
+                }
+
+                // Average Score Circle
+                if !swings.isEmpty {
+                    VStack(spacing: 12) {
+                        ScoreCircleView(score: Int(session.averageScore))
+
+                        Text("Average Score")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Text("Based on \(swings.count) swing\(swings.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                }
 
                 // Average Metrics
                 if let metrics = averageMetrics {
@@ -108,20 +125,22 @@ struct SessionAverageView: View {
                 }
 
                 // Swings List
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Swings")
-                        .font(.headline)
-                        .padding(.horizontal)
+                if !swings.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Swings")
+                            .font(.headline)
+                            .padding(.horizontal)
 
-                    ForEach(swings) { swing in
-                        NavigationLink(destination: SwingScoreView(swing: swing)) {
-                            SwingRowCard(swing: swing)
+                        ForEach(swings) { swing in
+                            NavigationLink(destination: SwingScoreView(swing: swing)) {
+                                SwingRowCard(swing: swing)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.horizontal)
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.horizontal)
                     }
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
             }
         }
         .navigationTitle("Session")
@@ -142,6 +161,25 @@ struct SessionAverageView: View {
             hipShoulderAlignment: swingsWithMetrics.reduce(0) { $0 + $1.hipShoulderAlignment } / count,
             timeToContact: swingsWithMetrics.reduce(0) { $0 + $1.timeToContact } / count
         )
+    }
+}
+
+// MARK: - No Swings Detected View
+
+struct NoSwingsDetectedView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("No Swings Detected", systemImage: "exclamationmark.triangle")
+                .font(.headline)
+
+            Text("Try a clear side view with the full body in frame.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(12)
     }
 }
 
@@ -290,6 +328,7 @@ struct MetricPill: View {
         session.id = UUID()
         session.date = Date()
         session.averageScore = 68
+        session.recordingDuration = 12
         session.swingCount = 2
 
         return SessionAverageView(session: session)

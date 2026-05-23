@@ -8,7 +8,9 @@ public class Session: NSManagedObject {
     @NSManaged public var location: String?
     @NSManaged public var averageScore: Double
     @NSManaged public var recordingDuration: Double
+    @NSManaged public var recordingURL: String?
     @NSManaged public var swingCount: Int16
+    @NSManaged public var thumbnailData: Data?
     @NSManaged public var swings: NSSet?
 }
 
@@ -39,5 +41,17 @@ extension Session: Identifiable {
         }
 
         return swingsArray.reduce(0) { $0 + $1.duration }
+    }
+
+    public var recordingFileURL: URL? {
+        if let recordingURL, !recordingURL.isEmpty {
+            return URL(fileURLWithPath: recordingURL)
+        }
+
+        guard let swingVideoURL = swingsArray.first?.videoURL, !swingVideoURL.isEmpty else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: swingVideoURL)
     }
 }

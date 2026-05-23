@@ -39,6 +39,15 @@ struct SwingScoreView: View {
                         .padding()
                 }
 
+                let videoURL = URL(fileURLWithPath: swing.videoURL)
+                NavigationLink(destination: VideoPlaybackView(videoURL: videoURL)) {
+                    Label("Play Recording", systemImage: "play.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding(.horizontal)
+
                 // Learn More Link
                 Button(action: {
                     // TODO: Show explanation of metrics
@@ -272,6 +281,8 @@ struct AlignmentBarsView: View {
         swing.id = UUID()
         swing.timestamp = Date()
         swing.score = 73
+        swing.videoURL = ""
+        swing.duration = 0
 
         let metrics = SwingMetrics(context: context)
         metrics.id = UUID()

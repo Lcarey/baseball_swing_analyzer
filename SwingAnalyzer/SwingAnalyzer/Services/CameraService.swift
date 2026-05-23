@@ -1,19 +1,28 @@
 import AVFoundation
 import UIKit
 import Combine
+import Vision
 
 class CameraService: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var error: CameraError?
     @Published var isAuthorized = false
+    @Published var livePoseJoints: [String: CGPoint]?
 
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureMovieFileOutput?
+    private var videoDataOutput: AVCaptureVideoDataOutput?
     private var videoDevice: AVCaptureDevice?
     private var currentRecordingURL: URL?
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+    private var recordingCompletion: ((Result<URL, Error>) -> Void)?
+    private let livePoseQueue = DispatchQueue(label: "com.swinganalyzer.livePoseQueue", qos: .userInitiated)
+    private var lastLivePoseTime: CFTimeInterval = 0
+    private var isProcessingLivePoseFrame = false
+    private let livePoseInterval: CFTimeInterval = 0.1
+    private let confidenceThreshold: Float = AppConstants.confidenceThreshold
 
     enum CameraError: Error, LocalizedError {
         case unauthorized
@@ -139,6 +148,24 @@ class CameraService: NSObject, ObservableObject {
         self.videoOutput = movieOutput
         print("CameraService: Movie output added to session")
 
+        // Add video data output for screen-only live pose detection. Recording can still
+        // proceed if this auxiliary stream is unavailable on a device.
+        print("CameraService: Creating live pose video data output")
+        let videoDataOutput = AVCaptureVideoDataOutput()
+        videoDataOutput.alwaysDiscardsLateVideoFrames = true
+        videoDataOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+
+        if session.canAddOutput(videoDataOutput) {
+            session.addOutput(videoDataOutput)
+            videoDataOutput.setSampleBufferDelegate(self, queue: livePoseQueue)
+            self.videoDataOutput = videoDataOutput
+            print("CameraService: Live pose video data output added to session")
+        } else {
+            print("CameraService: WARNING - Cannot add live pose video data output; recording will continue without overlay")
+        }
+
         // Configure output
         if let connection = movieOutput.connection(with: .video) {
             if connection.isVideoStabilizationSupported {
@@ -216,9 +243,17 @@ class CameraService: NSObject, ObservableObject {
         return outputURL
     }
 
-    func stopRecording() {
-        guard let videoOutput = videoOutput, videoOutput.isRecording else { return }
+    func stopRecording(completion: ((Result<URL, Error>) -> Void)? = nil) {
+        guard let videoOutput = videoOutput, videoOutput.isRecording else {
+            if let currentRecordingURL {
+                completion?(.success(currentRecordingURL))
+            } else {
+                completion?(.failure(CameraError.recordingFailed))
+            }
+            return
+        }
 
+        recordingCompletion = completion
         videoOutput.stopRecording()
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -263,9 +298,14 @@ class CameraService: NSObject, ObservableObject {
     func cleanup() {
         stopRecording()
         stopSession()
+        videoDataOutput?.setSampleBufferDelegate(nil, queue: nil)
         captureSession = nil
         videoOutput = nil
+        videoDataOutput = nil
         videoDevice = nil
+        DispatchQueue.main.async {
+            self.livePoseJoints = nil
+        }
     }
 }
 
@@ -273,17 +313,106 @@ class CameraService: NSObject, ObservableObject {
 
 extension CameraService: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if let error = error {
+        let completion = recordingCompletion
+        recordingCompletion = nil
+
+        if let error = error, !recordingFinishedSuccessfully(error) {
             print("Recording error: \(error.localizedDescription)")
             DispatchQueue.main.async {
                 self.error = .recordingFailed
+                completion?(.failure(error))
             }
         } else {
             print("Recording saved to: \(outputFileURL)")
+            DispatchQueue.main.async {
+                completion?(.success(outputFileURL))
+            }
         }
     }
 
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
         print("Recording started: \(fileURL)")
+    }
+
+    private func recordingFinishedSuccessfully(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true
+    }
+}
+
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+
+extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let now = CACurrentMediaTime()
+        guard now - lastLivePoseTime >= livePoseInterval else { return }
+        guard !isProcessingLivePoseFrame else { return }
+
+        lastLivePoseTime = now
+        isProcessingLivePoseFrame = true
+        defer { isProcessingLivePoseFrame = false }
+
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let joints = detectLivePose(in: imageBuffer)
+
+        DispatchQueue.main.async {
+            self.livePoseJoints = joints
+        }
+    }
+
+    private func detectLivePose(in imageBuffer: CVPixelBuffer) -> [String: CGPoint]? {
+        let request = VNDetectHumanBodyPoseRequest()
+        request.revision = VNDetectHumanBodyPoseRequestRevision1
+
+        let handler = VNImageRequestHandler(
+            cvPixelBuffer: imageBuffer,
+            orientation: .right,
+            options: [:]
+        )
+
+        do {
+            try handler.perform([request])
+
+            guard let observation = request.results?.first else {
+                return nil
+            }
+
+            return extractLiveJointPoints(from: observation)
+        } catch {
+            print("CameraService: Live pose detection failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func extractLiveJointPoints(from observation: VNHumanBodyPoseObservation) -> [String: CGPoint]? {
+        var joints: [String: CGPoint] = [:]
+
+        let jointNames: [VNHumanBodyPoseObservation.JointName] = [
+            .nose,
+            .neck,
+            .leftShoulder,
+            .rightShoulder,
+            .leftElbow,
+            .rightElbow,
+            .leftWrist,
+            .rightWrist,
+            .leftHip,
+            .rightHip,
+            .leftKnee,
+            .rightKnee,
+            .leftAnkle,
+            .rightAnkle
+        ]
+
+        for jointName in jointNames {
+            guard let point = try? observation.recognizedPoint(jointName),
+                  point.confidence > confidenceThreshold else {
+                continue
+            }
+
+            joints[jointName.rawValue.rawValue] = point.location
+        }
+
+        return joints.count >= 8 ? joints : nil
     }
 }

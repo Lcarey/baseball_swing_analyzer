@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import UIKit
 
 struct SessionListView: View {
     @EnvironmentObject var viewModel: SessionViewModel
@@ -89,21 +90,7 @@ struct SessionRowView: View {
 
     var body: some View {
         HStack(spacing: 15) {
-            // Score Circle
-            ZStack {
-                Circle()
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 3)
-                    .frame(width: 50, height: 50)
-
-                Circle()
-                    .trim(from: 0, to: session.averageScore / 100)
-                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: 50, height: 50)
-                    .rotationEffect(.degrees(-90))
-
-                Text("\(Int(session.averageScore))")
-                    .font(.system(size: 16, weight: .bold))
-            }
+            SessionThumbnailView(thumbnailData: session.thumbnailData)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(session.date.formattedForDisplay())
@@ -119,6 +106,23 @@ struct SessionRowView: View {
             }
 
             Spacer()
+
+            VStack(spacing: 4) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 3)
+                        .frame(width: 44, height: 44)
+
+                    Circle()
+                        .trim(from: 0, to: session.averageScore / 100)
+                        .stroke(scoreColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 44, height: 44)
+                        .rotationEffect(.degrees(-90))
+
+                    Text("\(Int(session.averageScore))")
+                        .font(.system(size: 14, weight: .bold))
+                }
+            }
 
             Image(systemName: "chevron.right")
                 .font(.caption)
@@ -140,6 +144,29 @@ struct SessionRowView: View {
     private var recordingLengthText: String {
         let seconds = max(0, Int(session.displayRecordingDuration.rounded()))
         return "\(seconds) sec"
+    }
+}
+
+struct SessionThumbnailView: View {
+    let thumbnailData: Data?
+
+    var body: some View {
+        ZStack {
+            if let thumbnailData, let image = UIImage(data: thumbnailData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Rectangle()
+                    .fill(Color(UIColor.secondarySystemBackground))
+
+                Image(systemName: "video")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(width: 64, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

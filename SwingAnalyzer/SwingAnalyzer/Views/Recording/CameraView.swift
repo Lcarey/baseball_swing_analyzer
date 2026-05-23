@@ -15,7 +15,7 @@ struct CameraView: View {
         ZStack {
             // Camera Preview
             if let session = viewModel.captureSession {
-                CameraPreviewView(session: session)
+                CameraPreviewView(session: session, joints: viewModel.livePoseJoints)
                     .ignoresSafeArea()
                     .onAppear {
                         print("CameraView: CameraPreviewView appeared, session isRunning: \(session.isRunning)")
@@ -82,7 +82,7 @@ struct CameraView: View {
                 // Recording controls
                 RecordingControlsView(
                     isRecording: viewModel.isRecording,
-                    isEnabled: viewModel.isAuthorized && viewModel.captureSession != nil,
+                    isEnabled: viewModel.isAuthorized && viewModel.captureSession != nil && !viewModel.isProcessing,
                     onRecord: {
                         if viewModel.isRecording {
                             stopRecordingAndDismiss()
@@ -99,6 +99,13 @@ struct CameraView: View {
                 CameraAuthorizationView {
                     viewModel.requestCameraAccess()
                 }
+            }
+
+            if viewModel.isProcessing {
+                ProcessingOverlayView(
+                    message: viewModel.processingMessage,
+                    progress: viewModel.processingProgress
+                )
             }
         }
         .onAppear {
@@ -117,7 +124,13 @@ struct CameraView: View {
             viewModel.cleanup()
         }
         .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK", role: .cancel) { }
+            Button("OK", role: .cancel) {
+                if viewModel.dismissAfterError {
+                    viewModel.dismissAfterError = false
+                    sessionViewModel.fetchSessions()
+                    dismiss()
+                }
+            }
         } message: {
             Text(viewModel.error ?? "Unknown error")
         }
@@ -135,9 +148,11 @@ struct CameraView: View {
     private func stopRecordingAndDismiss() {
         viewModel.stopRecording { url in
             if let url = url {
-                viewModel.saveRecording(url: url) {
+                viewModel.saveRecording(url: url) { shouldDismiss in
                     sessionViewModel.fetchSessions()
-                    dismiss()
+                    if shouldDismiss {
+                        dismiss()
+                    }
                 }
             } else {
                 sessionViewModel.fetchSessions()
@@ -163,6 +178,35 @@ struct CameraView: View {
         let seconds = Int(duration) % 60
         let milliseconds = Int((duration.truncatingRemainder(dividingBy: 1)) * 10)
         return String(format: "%02d:%02d.%01d", minutes, seconds, milliseconds)
+    }
+}
+
+// MARK: - Processing Overlay
+
+struct ProcessingOverlayView: View {
+    let message: String
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView(value: progress > 0 ? progress : nil)
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+
+                Text(message.isEmpty ? "Processing..." : message)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(24)
+            .background(Color.black.opacity(0.72))
+            .cornerRadius(12)
+            .padding(.horizontal, 48)
+        }
     }
 }
 

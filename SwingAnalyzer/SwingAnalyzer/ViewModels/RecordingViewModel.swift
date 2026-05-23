@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import Combine
 import CoreData
+import UIKit
 
 class RecordingViewModel: ObservableObject {
     @Published var isRecording = false
@@ -10,9 +11,15 @@ class RecordingViewModel: ObservableObject {
     @Published var error: String?
     @Published var showError = false
     @Published var isAuthorized = false
+    @Published var isProcessing = false
+    @Published var processingMessage = ""
+    @Published var processingProgress: Double = 0
+    @Published var dismissAfterError = false
+    @Published var livePoseJoints: [String: CGPoint]?
 
     private let cameraService = CameraService()
     private var cancellables = Set<AnyCancellable>()
+    private var analysisCancellables = Set<AnyCancellable>()
     private var recordingURL: URL?
     private var analysisViewModel: SwingAnalysisViewModel?
     private let viewContext: NSManagedObjectContext
@@ -36,6 +43,10 @@ class RecordingViewModel: ObservableObject {
         cameraService.$isAuthorized
             .receive(on: DispatchQueue.main)
             .assign(to: &$isAuthorized)
+
+        cameraService.$livePoseJoints
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$livePoseJoints)
 
         cameraService.$error
             .receive(on: DispatchQueue.main)
@@ -101,6 +112,7 @@ class RecordingViewModel: ObservableObject {
             }
 
             session?.date = Date()
+            session?.recordingURL = recordingURL?.path
             session?.recordingDuration = 0
             saveContext()
         } catch {
@@ -111,23 +123,38 @@ class RecordingViewModel: ObservableObject {
 
     func stopRecording(completion: @escaping (URL?) -> Void) {
         let fallbackDuration = recordingDuration
-        cameraService.stopRecording()
+        isProcessing = true
+        processingMessage = "Finishing recording..."
+        processingProgress = 0
 
-        // Give it a moment to finish writing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self, let url = self.recordingURL else {
+        cameraService.stopRecording { [weak self] result in
+            guard let self = self else {
                 completion(nil)
                 return
             }
 
-            // Verify file exists
+            switch result {
+            case .success(let url):
+                self.finishRecording(url: url, fallbackDuration: fallbackDuration, completion: completion)
+
+            case .failure(let error):
+                self.isProcessing = false
+                self.error = "Recording failed to finish: \(error.localizedDescription)"
+                self.showError = true
+                completion(nil)
+            }
+        }
+    }
+
+    private func finishRecording(url: URL, fallbackDuration: TimeInterval, completion: @escaping (URL?) -> Void) {
+        Task { @MainActor in
             if FileManager.default.fileExists(atPath: url.path) {
-                Task { @MainActor in
-                    let duration = await self.recordingDuration(from: url, fallbackDuration: fallbackDuration)
-                    self.updateRecordingDuration(duration)
-                    completion(url)
-                }
+                let duration = await self.recordingDuration(from: url, fallbackDuration: fallbackDuration)
+                let thumbnailData = await self.thumbnailData(from: url)
+                self.updateRecordingMetadata(url: url, duration: duration, thumbnailData: thumbnailData)
+                completion(url)
             } else {
+                self.isProcessing = false
                 self.error = "Recording file not found"
                 self.showError = true
                 completion(nil)
@@ -163,13 +190,34 @@ class RecordingViewModel: ObservableObject {
         return fallbackDuration
     }
 
-    private func updateRecordingDuration(_ duration: TimeInterval) {
+    private func thumbnailData(from url: URL) async -> Data? {
+        await Task.detached(priority: .userInitiated) {
+            let asset = AVAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+
+            do {
+                let imageTime = CMTime(seconds: 0.2, preferredTimescale: 600)
+                let image = try generator.copyCGImage(at: imageTime, actualTime: nil)
+                return UIImage(cgImage: image).jpegData(compressionQuality: 0.75)
+            } catch {
+                print("Failed to generate recording thumbnail: \(error)")
+                return nil
+            }
+        }.value
+    }
+
+    private func updateRecordingMetadata(url: URL, duration: TimeInterval, thumbnailData: Data?) {
         guard let session = session else { return }
+        session.recordingURL = url.path
         session.recordingDuration = duration
+        if let thumbnailData {
+            session.thumbnailData = thumbnailData
+        }
         saveContext()
     }
 
-    func saveRecording(url: URL, completion: @escaping () -> Void) {
+    func saveRecording(url: URL, completion: @escaping (Bool) -> Void) {
         guard let session = session else {
             createSession()
             saveRecording(url: url, completion: completion)
@@ -178,19 +226,64 @@ class RecordingViewModel: ObservableObject {
 
         print("Recording saved: \(url.path)")
         print("Session: \(session.id)")
+        isProcessing = true
+        processingMessage = "Detecting body pose..."
+        processingProgress = 0
+        dismissAfterError = false
 
         // Start video processing
         let analysisVM = SwingAnalysisViewModel(context: viewContext)
         analysisViewModel = analysisVM
-        analysisVM.processVideo(url: url, for: session) { success in
-            if success {
-                print("Video analysis complete!")
-            } else {
-                print("Video analysis failed")
-            }
+        bindAnalysisProgress(analysisVM)
+        analysisVM.processVideo(url: url, for: session) { [weak self] result in
+            guard let self = self else { return }
+
+            self.analysisCancellables.removeAll()
             self.analysisViewModel = nil
-            completion()
+
+            switch result {
+            case .success(let swingCount):
+                print("Video analysis complete: \(swingCount) swing(s)")
+                self.isProcessing = false
+                completion(true)
+
+            case .noSwingsDetected(let frameCount):
+                print("Video analysis complete: no swings detected from \(frameCount) pose frame(s)")
+                self.isProcessing = false
+                self.dismissAfterError = true
+                self.error = "No swing detected. Processed \(frameCount) pose frames. Try a clear side view with the full body in frame."
+                self.showError = true
+                completion(false)
+
+            case .failed(let message):
+                print("Video analysis failed: \(message)")
+                self.isProcessing = false
+                self.dismissAfterError = true
+                self.error = message
+                self.showError = true
+                completion(false)
+            }
         }
+    }
+
+    private func bindAnalysisProgress(_ analysisVM: SwingAnalysisViewModel) {
+        analysisCancellables.removeAll()
+
+        analysisVM.$statusMessage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                if !message.isEmpty {
+                    self?.processingMessage = message
+                }
+            }
+            .store(in: &analysisCancellables)
+
+        analysisVM.$progress
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] progress in
+                self?.processingProgress = progress
+            }
+            .store(in: &analysisCancellables)
     }
 
     private func saveContext() {
@@ -208,6 +301,7 @@ class RecordingViewModel: ObservableObject {
     func cleanup() {
         cameraService.cleanup()
         captureSession = nil
+        livePoseJoints = nil
     }
 
     deinit {

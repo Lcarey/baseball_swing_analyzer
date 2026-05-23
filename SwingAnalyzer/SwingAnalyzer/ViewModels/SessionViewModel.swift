@@ -45,6 +45,10 @@ class SessionViewModel: ObservableObject {
 
     func deleteSession(_ session: Session) {
         // Delete associated video files
+        if let recordingURL = session.recordingURL {
+            deleteVideoFile(at: recordingURL)
+        }
+
         for swing in session.swingsArray {
             deleteVideoFile(at: swing.videoURL)
         }
@@ -78,8 +82,8 @@ class SessionViewModel: ObservableObject {
 
     private func deleteVideoFile(at urlString: String) {
         let fileManager = FileManager.default
-        if let url = URL(string: urlString),
-           fileManager.fileExists(atPath: url.path) {
+        let url = URL(fileURLWithPath: urlString)
+        if fileManager.fileExists(atPath: url.path) {
             try? fileManager.removeItem(at: url)
         }
     }

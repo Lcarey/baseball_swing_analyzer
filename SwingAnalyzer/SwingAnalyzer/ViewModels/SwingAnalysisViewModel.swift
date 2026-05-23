@@ -2,6 +2,12 @@ import Foundation
 import CoreData
 import Combine
 
+enum VideoAnalysisResult {
+    case success(swingCount: Int)
+    case noSwingsDetected(frameCount: Int)
+    case failed(message: String)
+}
+
 class SwingAnalysisViewModel: ObservableObject {
     @Published var isProcessing = false
     @Published var progress: Double = 0
@@ -31,7 +37,7 @@ class SwingAnalysisViewModel: ObservableObject {
 
     // MARK: - Process Video
 
-    func processVideo(url: URL, for session: Session, completion: @escaping (Bool) -> Void) {
+    func processVideo(url: URL, for session: Session, completion: @escaping (VideoAnalysisResult) -> Void) {
         statusMessage = "Detecting body pose..."
 
         poseDetectionService.processVideo(url: url) { [weak self] result in
@@ -43,8 +49,9 @@ class SwingAnalysisViewModel: ObservableObject {
 
             case .failure(let error):
                 DispatchQueue.main.async {
-                    self.error = "Pose detection failed: \(error.localizedDescription)"
-                    completion(false)
+                    let message = "Pose detection failed: \(error.localizedDescription)"
+                    self.error = message
+                    completion(.failed(message: message))
                 }
             }
         }
@@ -52,7 +59,7 @@ class SwingAnalysisViewModel: ObservableObject {
 
     // MARK: - Process Frames
 
-    private func processFrames(_ frames: [FrameJointData], videoURL: URL, session: Session, completion: @escaping (Bool) -> Void) {
+    private func processFrames(_ frames: [FrameJointData], videoURL: URL, session: Session, completion: @escaping (VideoAnalysisResult) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -65,6 +72,16 @@ class SwingAnalysisViewModel: ObservableObject {
 
             // Detect swings
             let swings = self.swingDetectionService.detectSwings(from: frames, velocities: velocities)
+            print("SwingAnalysis: poseFrames=\(frames.count), velocityFrames=\(velocities.count), detectedSwings=\(swings.count)")
+
+            guard !swings.isEmpty else {
+                self.saveEmptyAnalysis(for: session)
+                DispatchQueue.main.async {
+                    self.statusMessage = "No swings detected"
+                    completion(.noSwingsDetected(frameCount: frames.count))
+                }
+                return
+            }
 
             DispatchQueue.main.async {
                 self.statusMessage = "Analyzing biomechanics..."
@@ -87,12 +104,30 @@ class SwingAnalysisViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 self.statusMessage = "Complete!"
-                completion(true)
+                completion(.success(swingCount: swings.count))
             }
         }
     }
 
     // MARK: - Save to Core Data
+
+    private func saveEmptyAnalysis(for session: Session) {
+        let context = viewContext
+
+        context.performAndWait {
+            session.swingCount = 0
+            session.averageScore = 0
+
+            do {
+                try context.save()
+            } catch {
+                print("Failed to save empty analysis result: \(error)")
+                DispatchQueue.main.async {
+                    self.error = "Failed to save analysis results"
+                }
+            }
+        }
+    }
 
     private func saveSwings(swings: [SwingData], metrics: [BiomechanicsMetrics], frames: [FrameJointData], videoURL: URL, session: Session) {
         let context = viewContext
