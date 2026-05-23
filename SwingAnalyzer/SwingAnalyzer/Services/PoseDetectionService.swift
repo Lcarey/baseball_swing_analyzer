@@ -47,6 +47,11 @@ class PoseDetectionService: ObservableObject {
     // MARK: - Extract Pose Data
 
     private func extractPoseData(from asset: AVAsset) throws -> [FrameJointData] {
+        // Using synchronous API for simplicity - async version would require restructuring
+        #if compiler(>=5.5)
+        #warning("Consider migrating to async loadTracks API in future update")
+        #endif
+
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
             throw PoseError.invalidVideoURL
         }

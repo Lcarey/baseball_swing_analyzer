@@ -134,7 +134,7 @@ class CameraService: NSObject, ObservableObject {
             }
         }
 
-        if let format = bestFormat, let range = bestFrameRateRange {
+        if let format = bestFormat, let _ = bestFrameRateRange {
             device.activeFormat = format
             device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(desiredFrameRate))
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(desiredFrameRate))
