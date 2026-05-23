@@ -42,21 +42,22 @@ class CameraService: NSObject, ObservableObject {
 
     // MARK: - Authorization
 
-    func checkAuthorization() {
+    @discardableResult
+    func checkAuthorization() -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
-        DispatchQueue.main.async {
-            switch status {
-            case .authorized:
-                self.isAuthorized = true
-            case .notDetermined:
-                self.isAuthorized = false
-            case .denied, .restricted:
-                self.isAuthorized = false
-                self.error = .unauthorized
-            @unknown default:
-                self.isAuthorized = false
-            }
+        switch status {
+        case .authorized:
+            isAuthorized = true
+        case .notDetermined:
+            isAuthorized = false
+        case .denied, .restricted:
+            isAuthorized = false
+            error = .unauthorized
+        @unknown default:
+            isAuthorized = false
         }
+
+        return isAuthorized
     }
 
     func requestAuthorization() {
@@ -73,47 +74,82 @@ class CameraService: NSObject, ObservableObject {
     // MARK: - Session Setup
 
     func setupSession() throws -> AVCaptureSession {
+        if let captureSession, videoOutput != nil {
+            print("CameraService: Reusing existing session")
+            return captureSession
+        }
+
+        print("CameraService: Starting session setup")
         let session = AVCaptureSession()
         session.beginConfiguration()
 
         // Set session preset for high quality
         if session.canSetSessionPreset(.high) {
             session.sessionPreset = .high
+            print("CameraService: Set session preset to .high")
+        } else {
+            print("CameraService: WARNING - Cannot set .high preset")
         }
 
         // Get video device
+        print("CameraService: Requesting back camera device")
         guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            print("CameraService: ERROR - No back camera found")
             throw CameraError.deviceNotFound
         }
+        print("CameraService: Found video device: \(videoDevice.localizedName)")
         self.videoDevice = videoDevice
 
         // Configure device for 60fps
-        try configureDevice(videoDevice)
+        print("CameraService: Configuring device for 60fps")
+        do {
+            try configureDevice(videoDevice)
+            print("CameraService: Device configured successfully")
+        } catch {
+            print("CameraService: ERROR - Device configuration failed: \(error)")
+            throw error
+        }
 
         // Add video input
-        let videoInput = try AVCaptureDeviceInput(device: videoDevice)
+        print("CameraService: Creating video input")
+        let videoInput: AVCaptureDeviceInput
+        do {
+            videoInput = try AVCaptureDeviceInput(device: videoDevice)
+            print("CameraService: Video input created")
+        } catch {
+            print("CameraService: ERROR - Failed to create video input: \(error)")
+            throw CameraError.setupFailed
+        }
+
         guard session.canAddInput(videoInput) else {
+            print("CameraService: ERROR - Cannot add video input to session")
             throw CameraError.setupFailed
         }
         session.addInput(videoInput)
+        print("CameraService: Video input added to session")
 
         // Add movie file output
+        print("CameraService: Creating movie output")
         let movieOutput = AVCaptureMovieFileOutput()
         guard session.canAddOutput(movieOutput) else {
+            print("CameraService: ERROR - Cannot add movie output to session")
             throw CameraError.setupFailed
         }
         session.addOutput(movieOutput)
         self.videoOutput = movieOutput
+        print("CameraService: Movie output added to session")
 
         // Configure output
         if let connection = movieOutput.connection(with: .video) {
             if connection.isVideoStabilizationSupported {
                 connection.preferredVideoStabilizationMode = .auto
+                print("CameraService: Video stabilization enabled")
             }
         }
 
         session.commitConfiguration()
         self.captureSession = session
+        print("CameraService: Session setup complete")
 
         return session
     }
@@ -207,8 +243,14 @@ class CameraService: NSObject, ObservableObject {
     // MARK: - Session Control
 
     func startSession() {
+        print("CameraService: Starting capture session")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession?.startRunning()
+            guard let session = self?.captureSession else {
+                print("CameraService: ERROR - No capture session to start")
+                return
+            }
+            session.startRunning()
+            print("CameraService: Capture session started, isRunning: \(session.isRunning)")
         }
     }
 

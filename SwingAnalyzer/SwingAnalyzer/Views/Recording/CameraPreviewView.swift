@@ -18,8 +18,17 @@ struct CameraPreviewView: UIViewRepresentable {
 class CameraPreviewUIView: UIView {
     var session: AVCaptureSession? {
         didSet {
-            guard let session = session else { return }
+            print("CameraPreviewUIView: Session set")
+            guard let session = session else {
+                print("CameraPreviewUIView: Session is nil")
+                return
+            }
+            print("CameraPreviewUIView: Assigning session to preview layer")
+            print("CameraPreviewUIView: Session is running: \(session.isRunning)")
+            print("CameraPreviewUIView: Session inputs: \(session.inputs.count)")
+            print("CameraPreviewUIView: Session outputs: \(session.outputs.count)")
             previewLayer.session = session
+            print("CameraPreviewUIView: Preview layer session assigned")
         }
     }
 
@@ -33,6 +42,7 @@ class CameraPreviewUIView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        print("CameraPreviewUIView: Initializing with videoGravity .resizeAspectFill")
         previewLayer.videoGravity = .resizeAspectFill
     }
 
@@ -42,6 +52,7 @@ class CameraPreviewUIView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        print("CameraPreviewUIView: layoutSubviews called, bounds: \(bounds)")
         previewLayer.frame = bounds
     }
 }

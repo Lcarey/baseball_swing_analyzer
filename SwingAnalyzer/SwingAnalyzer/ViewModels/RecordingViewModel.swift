@@ -50,13 +50,20 @@ class RecordingViewModel: ObservableObject {
     // MARK: - Camera Setup
 
     func setupCamera() {
+        if captureSession != nil {
+            print("RecordingViewModel: Camera already setup")
+            return
+        }
+
+        print("RecordingViewModel: Setting up camera")
         do {
             let session = try cameraService.setupSession()
-            DispatchQueue.main.async {
-                self.captureSession = session
-            }
+            print("RecordingViewModel: Camera session created successfully")
+            captureSession = session
+            print("RecordingViewModel: Capture session assigned to published property")
             cameraService.startSession()
         } catch {
+            print("RecordingViewModel: ERROR - Camera setup failed: \(error)")
             DispatchQueue.main.async {
                 self.error = "Failed to setup camera: \(error.localizedDescription)"
                 self.showError = true
@@ -66,7 +73,6 @@ class RecordingViewModel: ObservableObject {
 
     func checkCameraAuthorization() -> Bool {
         cameraService.checkAuthorization()
-        return cameraService.isAuthorized
     }
 
     func requestCameraAccess() {
@@ -80,6 +86,12 @@ class RecordingViewModel: ObservableObject {
     // MARK: - Recording Control
 
     func startRecording() {
+        guard captureSession != nil else {
+            error = "Camera is not ready yet. Please wait a moment and try again."
+            showError = true
+            return
+        }
+
         do {
             recordingURL = try cameraService.startRecording()
         } catch {

@@ -17,9 +17,15 @@ struct CameraView: View {
             if let session = viewModel.captureSession {
                 CameraPreviewView(session: session)
                     .ignoresSafeArea()
+                    .onAppear {
+                        print("CameraView: CameraPreviewView appeared, session isRunning: \(session.isRunning)")
+                    }
             } else {
                 Color.black
                     .ignoresSafeArea()
+                    .onAppear {
+                        print("CameraView: Showing black screen, captureSession is nil")
+                    }
             }
 
             // Overlay UI
@@ -76,6 +82,7 @@ struct CameraView: View {
                 // Recording controls
                 RecordingControlsView(
                     isRecording: viewModel.isRecording,
+                    isEnabled: viewModel.isAuthorized && viewModel.captureSession != nil,
                     onRecord: {
                         if viewModel.isRecording {
                             stopRecordingAndDismiss()
@@ -97,6 +104,11 @@ struct CameraView: View {
         .onAppear {
             setupCameraIfAuthorized()
         }
+        .onChange(of: viewModel.isAuthorized) { isAuthorized in
+            if isAuthorized {
+                setupCameraIfAuthorized()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             // Recheck authorization when returning from Settings
             setupCameraIfAuthorized()
@@ -112,6 +124,11 @@ struct CameraView: View {
     }
 
     private func startRecording() {
+        guard viewModel.captureSession != nil else {
+            setupCameraIfAuthorized()
+            return
+        }
+
         viewModel.startRecording()
     }
 
@@ -129,12 +146,18 @@ struct CameraView: View {
     }
 
     private func setupCameraIfAuthorized() {
-        viewModel.checkCameraAuthorization()
-        if viewModel.isAuthorized {
+        print("CameraView: setupCameraIfAuthorized called")
+        let isAuthorized = viewModel.checkCameraAuthorization()
+        print("CameraView: isAuthorized = \(isAuthorized)")
+        if isAuthorized {
+            print("CameraView: Setting up camera")
             viewModel.setupCamera()
             if viewModel.session == nil {
+                print("CameraView: Creating new session")
                 viewModel.createSession()
             }
+        } else {
+            print("CameraView: Not authorized, skipping camera setup")
         }
     }
 
@@ -150,6 +173,7 @@ struct CameraView: View {
 
 struct RecordingControlsView: View {
     let isRecording: Bool
+    let isEnabled: Bool
     let onRecord: () -> Void
 
     var body: some View {
@@ -172,6 +196,8 @@ struct RecordingControlsView: View {
                     }
                 }
             }
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1 : 0.45)
 
             Text(isRecording ? "Stop Recording" : "Start Recording")
                 .font(.subheadline)
