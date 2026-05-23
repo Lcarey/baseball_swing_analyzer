@@ -50,22 +50,22 @@ final class SampleSessionSeeder {
             SampleVideo(
                 bundleResourceName: "BP_000004",
                 bundleResourceExtension: "mov",
-                stableSessionID: UUID(uuidString: "B100B100-0000-0000-0000-000000000004")!,
-                storedFileName: "sample_BP_000004.mov",
+                stableSessionID: UUID(uuidString: "B200B200-0000-0000-0000-000000000004")!,
+                storedFileName: "sample_v2_BP_000004.mov",
                 displayDate: date(year: 2026, month: 5, day: 15, hour: 14, minute: 30)
             ),
             SampleVideo(
                 bundleResourceName: "BP_002026",
                 bundleResourceExtension: "mov",
-                stableSessionID: UUID(uuidString: "B100B100-0000-0000-0000-000000002026")!,
-                storedFileName: "sample_BP_002026.mov",
+                stableSessionID: UUID(uuidString: "B200B200-0000-0000-0000-000000002026")!,
+                storedFileName: "sample_v2_BP_002026.mov",
                 displayDate: date(year: 2026, month: 5, day: 18, hour: 10, minute: 45)
             ),
             SampleVideo(
                 bundleResourceName: "BP_002028",
                 bundleResourceExtension: "mov",
-                stableSessionID: UUID(uuidString: "B100B100-0000-0000-0000-000000002028")!,
-                storedFileName: "sample_BP_002028.mov",
+                stableSessionID: UUID(uuidString: "B200B200-0000-0000-0000-000000002028")!,
+                storedFileName: "sample_v2_BP_002028.mov",
                 displayDate: date(year: 2026, month: 5, day: 20, hour: 16, minute: 15)
             )
         ]
