@@ -1,12 +1,18 @@
 import Foundation
 import SwiftUI
+import AVFoundation
 
 struct AppConstants {
     // Video Settings
     static let videoWidth: Int = 1080
     static let videoHeight: Int = 1920
-    static let frameRate: Int = 60
-    static let videoBitRate: Int = 5_000_000
+    static let frameRate: Int = 120
+    static let videoBitRate: Int = 12_000_000
+
+    // Exposure Settings
+    static let shutterSpeedFast: CMTime = CMTime(value: 1, timescale: 1000)
+    static let shutterSpeedMedium: CMTime = CMTime(value: 1, timescale: 500)
+    static let lowLightISOThreshold: Float = 400.0
 
     // Analysis Settings
     static let minSwingDuration: Double = 0.3 // seconds
