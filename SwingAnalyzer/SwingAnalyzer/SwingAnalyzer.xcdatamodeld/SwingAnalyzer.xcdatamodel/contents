@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24901" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="JointData" representedClassName="JointData" syncable="YES">
+        <attribute name="frameNumber" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="jointPositionsJSON" attributeType="String"/>
+        <attribute name="timestamp" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="swing" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Swing" inverseName="jointData" inverseEntity="Swing"/>
+    </entity>
+    <entity name="Session" representedClassName="Session" syncable="YES">
+        <attribute name="averageScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="date" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="location" optional="YES" attributeType="String"/>
+        <attribute name="swingCount" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="swings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Swing" inverseName="session" inverseEntity="Swing"/>
+    </entity>
+    <entity name="Swing" representedClassName="Swing" syncable="YES">
+        <attribute name="duration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="score" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="thumbnailData" optional="YES" attributeType="Binary"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="videoURL" attributeType="String"/>
+        <relationship name="jointData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="JointData" inverseName="swing" inverseEntity="JointData"/>
+        <relationship name="metrics" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="SwingMetrics" inverseName="swing" inverseEntity="SwingMetrics"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Session" inverseName="swings" inverseEntity="Session"/>
+    </entity>
+    <entity name="SwingMetrics" representedClassName="SwingMetrics" syncable="YES">
+        <attribute name="hipHorizontalMovement" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="hipRotation" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="hipShoulderAlignment" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="hipVerticalMovement" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="kneeBend" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timeToContact" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="swing" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Swing" inverseName="metrics" inverseEntity="Swing"/>
+    </entity>
+</model>
